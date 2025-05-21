@@ -121,7 +121,4 @@ else
   echo -e "${YELLOW}No changes detected. Skipping commit.${NC}"
 fi
 
-# --- Script Completion ---
-# Inform the user that the script has finished execution.
-echo -e "${GREEN}Script finished.${NC}"
 exit 0 # Exit with a zero status to indicate successful execution.
