@@ -34,7 +34,7 @@ def log(message, level='normal', task_name=None):
         log_message = f"{prefix}ERROR: {message}"
     elif level == 'step':
         color = COLOR_CYAN
-        log_message = f"{prefix}STEP: {message}"
+        log_message = f"{prefix}> {message}"
     elif level == 'normal':
         if not _verbose: # 'normal' messages only show if verbose is true, so skip if not
             return
