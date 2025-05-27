@@ -183,58 +183,58 @@ if __name__ == "__main__":
     # --- Pre-requisite checks ---
     if not git_repo_path:
         log(f"Error for '{task_name}': 'git_repo_path' is missing in config.json and not provided via --folder.", level='error')
-        log("--- Task aborted due to missing essential information. ---", level='error')
+        log("Task aborted due to missing essential information.", level='error')
         sys.exit(1)
 
     if not os.path.isdir(git_repo_path) or not os.path.exists(os.path.join(git_repo_path, '.git')):
         log(f"Error for '{task_name}': Defined Git repository path '{git_repo_path}' is not a valid Git repository or does not exist.", level='error')
-        log("--- Task aborted as Git repository is not set up correctly. ---", level='error')
+        log("Task aborted as Git repository is not set up correctly.", level='error')
         sys.exit(1)
 
-    # --- Workflow Steps ---
+    # Workflow Steps
 
-    log("--- Performing initial Git Pull ---", level='step')
+    log("Performing initial Git Pull", level='step')
     if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
-        log(f"--- Task '{task_name}' aborted: Initial Git Pull failed. ---", level='error')
+        log(f"Task '{task_name}' aborted: Initial Git Pull failed.", level='error')
         sys.exit(1)
 
-    log("--- Executing command_line ---", level='step')
+    log("Executing command_line", level='step')
     if command_line:
         if not execute_command(command_line, task_name):
-            log(f"--- Task '{task_name}' aborted: Command execution failed. ---", level='error')
+            log(f"Task '{task_name}' aborted: Command execution failed.", level='error')
             sys.exit(1)
     else:
         log("No command_line to execute.", level='normal', task_name=task_name)
 
-    log("--- Checking for changes in Git Repository ---", level='step')
+    log("Checking for changes in Git Repository", level='step')
     changes_found = diff_changes(git_repo_path, task_name)
     if changes_found is None:
-        log(f"--- Task '{task_name}' aborted: Failed to check for Git differences. ---", level='error')
+        log(f"Task '{task_name}' aborted: Failed to check for Git differences.", level='error')
         sys.exit(1)
 
     commit_successful = False
     if changes_found:
-        log("--- Changes detected. Performing Git Add and Commit ---", level='step')
+        log("Changes detected. Performing Git Add and Commit", level='step')
         if add_commit_changes(git_repo_path, git_commit_message, ".", task_name):
             commit_successful = True
         else:
-            log(f"--- Task '{task_name}' aborted: Git Add/Commit failed. ---", level='error')
+            log(f"Task '{task_name}' aborted: Git Add/Commit failed.", level='error')
             sys.exit(1)
     else:
-        log("--- No changes detected. Skipping Git Add and Commit. ---", level='step')
+        log("No changes detected. Skipping Git Add and Commit.", level='step')
 
     if commit_successful:
-        log("--- Commits made. Performing Git Push ---", level='step')
+        log("Commits made. Performing Git Push", level='step')
         if not push_updates(git_repo_path, branch=branch, origin=origin, task_name=task_name):
-            log(f"--- Task '{task_name}' completed with warnings: Git Push failed. ---", level='error')
+            log(f"Task '{task_name}' completed with warnings: Git Push failed.", level='error')
             sys.exit(1)
     else:
-        log("--- No new commits to push. Skipping Git Push. ---", level='step')
+        log("No new commits to push. Skipping Git Push.", level='step')
 
 
-    log("--- Performing final Git Pull (post-push sync) ---", level='step')
+    log("Performing final Git Pull (post-push sync)", level='step')
     if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
-        log(f"--- Task '{task_name}' completed with warnings: Final Git Pull failed. ---", level='error')
+        log(f"Task '{task_name}' completed with warnings: Final Git Pull failed.", level='error')
         sys.exit(1)
 
-    log(f"--- Task '{task_name}' completed successfully! ---", level='step')
+    log(f"Task '{task_name}' completed successfully!", level='step')
