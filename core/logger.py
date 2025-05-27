@@ -1,38 +1,48 @@
 # core/logger.py
 
-_VERBOSE = False # This is a private global variable to store the verbosity state
+_verbose = False
+
+# ANSI escape codes for colors
+# \033[...m is the general format for ANSI escape codes
+# 31m for red foreground, 36m for cyan foreground
+# 0m to reset all attributes (important!)
+COLOR_RED = "\033[31m"
+COLOR_CYAN = "\033[36m"
+COLOR_RESET = "\033[0m"
 
 def set_verbose(verbose_flag):
     """
-    Sets the global verbosity level for the logger.
-    This function should be called once, typically in main.py, after parsing CLI arguments.
+    Sets the global verbosity flag.
     """
-    global _VERBOSE
-    _VERBOSE = verbose_flag
+    global _verbose
+    _verbose = verbose_flag
 
-def log(message, level='normal', task_name=''):
+def log(message, level='normal', task_name=None):
     """
-    Prints a message to the console based on the configured verbosity level.
-
-    Args:
-        message (str): The string message to be displayed.
-        level (str): The logging level for the message.
-            - 'step': For major workflow steps (e.g., "--- Step 1: ..."). Always printed.
-            - 'error': For error messages. Always printed.
-            - 'normal': For regular, detailed progress messages. Printed only if verbose mode is active.
-        task_name (str, optional): A prefix for the message, typically the name of the task.
-                                   Adds indentation and context. Defaults to ''.
+    Logs a message with a specific level and optional task name,
+    applying color based on the log level.
     """
     prefix = ""
-    if task_name:
-        # Adds indentation for messages that belong to a specific task context
-        prefix = f"  [{task_name}] "
+    color = ""
+    log_message = ""
 
-    # Determine whether to print the message based on its level and the global verbosity setting
-    if level == 'step' or level == 'error':
-        # Step and error messages are always printed
-        print(message)
-    elif _VERBOSE: # <--- This is the crucial line for filtering 'normal' logs
-        # Normal messages are only printed if verbose mode is enabled
-        # If task_name is provided, prepend the formatted prefix
-        print(f"{prefix}{message}" if task_name else message)
+    if task_name:
+        prefix = f"[{task_name}] "
+
+    if level == 'error':
+        color = COLOR_RED
+        log_message = f"{prefix}ERROR: {message}"
+    elif level == 'step':
+        color = COLOR_CYAN
+        log_message = f"{prefix}STEP: {message}"
+    elif level == 'normal':
+        if not _verbose: # 'normal' messages only show if verbose is true, so skip if not
+            return
+        log_message = f"{prefix}INFO: {message}"
+    else: # Default for any unknown level, or if 'normal' and verbose is off
+        if not _verbose and level != 'error': # Only print if verbose or it's an error (which is handled above)
+            return
+        log_message = f"{prefix}INFO: {message}" # Fallback for other levels or non-verbose normal
+
+    # Print the message with color, followed by reset to not affect subsequent output
+    print(f"{color}{log_message}{COLOR_RESET}")

@@ -1,7 +1,8 @@
 import os
 import json
 import sys
-from datetime import datetime # Import datetime for timestamping config files
+# Removed: from datetime import datetime (No longer needed here as timestamp is not for filename)
+# We keep the datetime import in core/git_logic.py for commits.
 
 # Import our custom argument parser
 from core.cli_parser import parse_arguments
@@ -13,13 +14,13 @@ from core.git_logic import pull_updates, diff_changes, add_commit_changes, push_
 # Import the new logger functions
 from core.logger import set_verbose, log
 
-def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, folder_arg=None):
+def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, folder_arg=None, overwrite_flag=False):
     """
     Creates a new JSON configuration file with default values and optional
     branch/origin/folder from CLI arguments.
-    Ensures the directory path exists.
+    Ensures the directory path exists and handles overwrite logic.
     """
-    log(f"Attempting to create new configuration file for task: '{name}'", level='normal')
+    log(f"--- Starting configuration file creation for task: '{name}' ---", level='step')
     log(f"Target output path: '{output_filepath}'", level='normal')
 
     default_config = {
@@ -31,14 +32,20 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
         "git_commit_message": f"Automated update for {name}"
     }
 
-    # Ensure .json extension if not already present (this part is fine)
+    # Ensure .json extension if not already present
     if not output_filepath.lower().endswith(".json"):
         output_filepath += ".json"
         log(f"Appended '.json' extension to output path: '{output_filepath}'", level='normal')
 
+    # Check for file existence and handle overwrite
+    if os.path.exists(output_filepath):
+        if not overwrite_flag:
+            log(f"Error: Configuration file '{output_filepath}' already exists. Use --overwrite to force creation.", level='error')
+            sys.exit(1)
+        else:
+            log(f"Warning: Configuration file '{output_filepath}' already exists. Overwriting as --overwrite was specified.", level='normal')
 
     output_dir = os.path.dirname(output_filepath)
-    # If the output_filepath includes a directory, ensure it exists
     if output_dir and not os.path.exists(output_dir):
         log(f"Parent directory '{output_dir}' does not exist. Attempting to create...", level='normal')
         try:
@@ -47,10 +54,10 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
         except Exception as e:
             log(f"Error creating directory '{output_dir}': {e}", level='error')
             sys.exit(1)
-    elif not output_dir: # Case where output_filepath is just a filename in CWD
-        output_dir = os.getcwd() # For logging purposes
+    elif not output_dir:
+        output_dir = os.getcwd()
         log(f"Output file will be created in the current working directory: '{output_dir}'", level='normal')
-    else: # Directory already exists
+    else:
         log(f"Parent directory '{output_dir}' already exists.", level='normal')
 
     try:
@@ -62,6 +69,8 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
         log(f"Error creating configuration file '{output_filepath}': {e}", level='error')
         sys.exit(1)
 
+    log(f"--- Finished configuration file creation for task: '{name}' ---", level='step')
+
 
 if __name__ == "__main__":
     args = parse_arguments()
@@ -69,12 +78,10 @@ if __name__ == "__main__":
     # Set verbosity based on CLI argument before any logging occurs
     set_verbose(args.verbose)
 
-    # --- Determine the base directory for configs (either default or user-specified) ---
-    # args.config_dir now defaults to ~/git_automation_configs (from cli_parser.py)
+    # Determine the base directory for configs (either default or user-specified)
     effective_config_base_dir = os.path.abspath(args.config_dir)
 
     # Create the config base directory if it doesn't exist
-    # This ensures ~/git_automation_configs (or custom path) is ready
     if not os.path.exists(effective_config_base_dir):
         try:
             os.makedirs(effective_config_base_dir, exist_ok=True)
@@ -87,23 +94,20 @@ if __name__ == "__main__":
     if args.create:
         task_name_for_creation = args.create
         if args.output:
-            # User specified a full output path with -o/--output, use it directly
             output_filepath = args.output
         else:
-            # THIS IS THE CRUCIAL PART FOR THE BUG FIX:
-            # Default output path for creation: effective_config_base_dir + task name + timestamp + .json
-            # Replace spaces with underscores for filename compatibility
+            # THIS IS THE CRUCIAL CHANGE: Removed the timestamp from the default filename
             base_filename = f"{task_name_for_creation.replace(' ', '_').lower()}"
-            current_timestamp = datetime.now().strftime("%m%d%H%M%S") # Generate timestamp here
-            output_filepath = os.path.join(effective_config_base_dir, f"{base_filename}_{current_timestamp}.json")
+            output_filepath = os.path.join(effective_config_base_dir, f"{base_filename}.json") # NO TIMESTAMP HERE
 
-        # The create_config_file function now has improved logging internally
+        # Pass the new overwrite flag to create_config_file
         create_config_file(
             task_name_for_creation,
             output_filepath,
             branch_arg=args.branch,
             origin_arg=args.origin,
-            folder_arg=args.folder
+            folder_arg=args.folder,
+            overwrite_flag=args.overwrite
         )
         sys.exit(0)
 
@@ -111,15 +115,11 @@ if __name__ == "__main__":
     config_file_path = None
 
     if args.json:
-        # If --json is provided, it takes the highest precedence
         config_file_path = args.json
     elif args.task_identifier:
         if args.task_identifier.lower().endswith(".json"):
-            # If the positional argument looks like a filename, use it directly
             config_file_path = args.task_identifier
         else:
-            # Otherwise, treat it as a task name and construct the path
-            # within the effective_config_base_dir
             config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
 
     # If no config identifier or --json was provided, then we can't run a task
@@ -134,12 +134,13 @@ if __name__ == "__main__":
         log("    python main.py --json /path/to/my_config.json", level='normal')
         log("  Run by explicit JSON file path (positional):", level='normal')
         log("    python main.py ./local_task.json", level='normal')
-        log("  Create a new config (defaults to user home config dir, with timestamp):", level='normal')
+        log("  Create a new config (defaults to user home config dir):", level='normal')
         log("    python main.py --create \"New Workflow\"", level='normal')
+        log("  Create a new config and overwrite if exists:", level='normal')
+        log("    python main.py --create \"MyExistingConfig\" --overwrite", level='normal') # Adjusted example
         sys.exit(1)
 
     # From here downwards, the rest of your main.py logic should remain the same
-    # as it now correctly uses the determined `config_file_path`
     if not os.path.exists(config_file_path):
         log(f"Error: Configuration file '{config_file_path}' not found.", level='error')
         sys.exit(1)

@@ -37,12 +37,11 @@ def parse_arguments():
     )
 
     # --config-dir: base directory for task name lookups
-    # NEW DEFAULT PATH: User's home directory + 'git_automation_configs' folder
     default_config_dir = os.path.join(os.path.expanduser('~'), 'git_automation_configs')
     parser.add_argument(
         "--config-dir",
         metavar="PATH",
-        default=default_config_dir, # Changed default
+        default=default_config_dir,
         help=f"Base directory for looking up config files when only a task name is provided (e.g., 'my_task' resolves to 'PATH/my_task.json'). Defaults to '{default_config_dir}'."
     )
 
@@ -50,7 +49,7 @@ def parse_arguments():
     parser.add_argument(
         "-o", "--output",
         metavar="FILEPATH",
-        help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the current directory."
+        help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME_MMDDHHMMSS.json in the default config directory."
     )
     
     # Git override arguments (branch, origin, folder)
@@ -73,6 +72,13 @@ def parse_arguments():
         "--verbose",
         action="store_true",
         help="Enable verbose output for detailed logging of operations."
+    )
+
+    # NEW: --overwrite flag for creation
+    parser.add_argument(
+        "--overwrite",
+        action="store_true", # This makes it a boolean flag
+        help="When creating a configuration file, overwrite it if it already exists."
     )
 
     return parser.parse_args()
