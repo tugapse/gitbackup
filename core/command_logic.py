@@ -1,29 +1,42 @@
 import subprocess
+import sys
+from core.logger import log # Import the new logger
 
-def execute_command(command_line_str, task_name="Unnamed Task"):
+def execute_command(command, task_name):
     """
-    Executes a given command line string.
+    Executes a shell command.
+    Logs command execution and output at 'normal' level, errors at 'error' level.
     """
-    if not command_line_str:
-        print(f"  No command_line specified for '{task_name}'. Skipping command execution.")
-        return True # Considered successful if no command to run
-
-    print(f"\n  Executing command for '{task_name}': '{command_line_str}'")
+    # This message will only show in verbose mode
+    log(f"Attempting to execute command: '{command}'", level='normal', task_name=task_name)
     try:
-        result = subprocess.run(command_line_str, shell=True, check=True, capture_output=True, text=True)
-        print("    Command Output (STDOUT):\n", result.stdout)
-        if result.stderr:
-            print("    Command Output (STDERR):\n", result.stderr)
-        print(f"  Command for '{task_name}' executed successfully with exit code {result.returncode}.")
-        return True
-    except subprocess.CalledProcessError as e:
-        print(f"  Error: Command for '{task_name}' failed with exit code {e.returncode}.")
-        print("    STDOUT:\n", e.stdout)
-        print("    STDERR:\n", e.stderr)
-        return False
+        # Use shell=True for simple commands; for more complex, consider shell=False and command parsing
+        process = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=False # We handle the return code ourselves
+        )
+
+        if process.stdout:
+            # Command STDOUT will only show in verbose mode
+            log(f"Command STDOUT:\n{process.stdout.strip()}", level='normal', task_name=task_name)
+        if process.stderr:
+            # Command STDERR will only show in verbose mode
+            log(f"Command STDERR:\n{process.stderr.strip()}", level='normal', task_name=task_name)
+
+        if process.returncode != 0:
+            # Command failures are considered errors and will always be shown
+            log(f"Command FAILED with exit code {process.returncode}.", level='error', task_name=task_name)
+            return False
+        else:
+            # This message will only show in verbose mode
+            log(f"Command executed successfully.", level='normal', task_name=task_name)
+            return True
     except FileNotFoundError:
-        print(f"  Error: Command '{command_line_str.split()[0]}' not found for '{task_name}'. Ensure it's in PATH or provide full path.")
+        log(f"Error: The command '{command.split()[0]}' was not found.", level='error', task_name=task_name)
         return False
     except Exception as e:
-        print(f"  An unexpected error occurred during command execution for '{task_name}': {e}")
+        log(f"An unexpected error occurred during command execution: {e}", level='error', task_name=task_name)
         return False
