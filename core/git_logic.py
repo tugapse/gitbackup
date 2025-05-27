@@ -1,6 +1,7 @@
 import subprocess
 import os
-from core.logger import log # Ensure you're importing the log function
+from datetime import datetime # Import datetime for timestamping
+from core.logger import log
 
 def run_git_command(repo_path, command_args, task_name, capture_output=False):
     """
@@ -76,8 +77,13 @@ def diff_changes(repo_path, task_name):
 def add_commit_changes(repo_path, commit_message, files_to_add, task_name):
     """
     Stages specified files and commits them to the repository.
+    Appends a timestamp to the commit message.
     Logs at 'normal' level for non-critical information.
     """
+    # Generate timestamp
+    timestamp = datetime.now().strftime("%m%d%H%M%S") # MMDDHHMMSS
+    final_commit_message = f"{commit_message} [{timestamp}]"
+
     # This message will only show in verbose mode
     log(f"Staging changes ('{files_to_add}')...", level='normal', task_name=task_name)
     add_result = run_git_command(repo_path, ["add", files_to_add], task_name)
@@ -86,8 +92,8 @@ def add_commit_changes(repo_path, commit_message, files_to_add, task_name):
         return False
 
     # This message will only show in verbose mode
-    log(f"Committing changes with message: '{commit_message}'...", level='normal', task_name=task_name)
-    commit_result = run_git_command(repo_path, ["commit", "-m", commit_message], task_name)
+    log(f"Committing changes with message: '{final_commit_message}'...", level='normal', task_name=task_name)
+    commit_result = run_git_command(repo_path, ["commit", "-m", final_commit_message], task_name)
     if commit_result is None:
         log(f"Git Commit failed.", level='error', task_name=task_name)
         return False
