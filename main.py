@@ -193,12 +193,12 @@ if __name__ == "__main__":
 
     # --- Workflow Steps ---
 
-    log("\n--- Step 1: Performing initial Git Pull ---", level='step')
+    log("--- Step 1: Performing initial Git Pull ---", level='step')
     if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
         log(f"--- Task '{task_name}' aborted: Initial Git Pull failed. ---", level='error')
         sys.exit(1)
 
-    log("\n--- Step 2: Executing command_line ---", level='step')
+    log("--- Step 2: Executing command_line ---", level='step')
     if command_line:
         if not execute_command(command_line, task_name):
             log(f"--- Task '{task_name}' aborted: Command execution failed. ---", level='error')
@@ -206,7 +206,7 @@ if __name__ == "__main__":
     else:
         log("No command_line to execute.", level='normal', task_name=task_name)
 
-    log("\n--- Step 3: Checking for changes in Git Repository ---", level='step')
+    log("--- Step 3: Checking for changes in Git Repository ---", level='step')
     changes_found = diff_changes(git_repo_path, task_name)
     if changes_found is None:
         log(f"--- Task '{task_name}' aborted: Failed to check for Git differences. ---", level='error')
@@ -214,17 +214,17 @@ if __name__ == "__main__":
 
     commit_successful = False
     if changes_found:
-        log("\n--- Step 4: Changes detected. Performing Git Add and Commit ---", level='step')
+        log("--- Step 4: Changes detected. Performing Git Add and Commit ---", level='step')
         if add_commit_changes(git_repo_path, git_commit_message, ".", task_name):
             commit_successful = True
         else:
             log(f"--- Task '{task_name}' aborted: Git Add/Commit failed. ---", level='error')
             sys.exit(1)
     else:
-        log("\n--- Step 4: No changes detected. Skipping Git Add and Commit. ---", level='step')
+        log("--- Step 4: No changes detected. Skipping Git Add and Commit. ---", level='step')
 
     if commit_successful:
-        log("\n--- Step 5: Commits made. Performing Git Push ---", level='step')
+        log("--- Step 5: Commits made. Performing Git Push ---", level='step')
         if not push_updates(git_repo_path, branch=branch, origin=origin, task_name=task_name):
             log(f"--- Task '{task_name}' completed with warnings: Git Push failed. ---", level='error')
             sys.exit(1)
