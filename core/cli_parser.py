@@ -31,7 +31,7 @@ def parse_arguments():
         metavar="FILEPATH",
         help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the current directory."
     )
-    # New arguments for overriding Git properties
+    # Arguments for overriding Git properties or pre-filling during creation
     parser.add_argument(
         "--branch",
         help="Overrides the 'branch' specified in the config file for this run or pre-fills it during creation."
@@ -40,11 +40,16 @@ def parse_arguments():
         "--origin",
         help="Overrides the 'origin' specified in the config file for this run or pre-fills it during creation."
     )
-    # New argument for specifying the local Git repository folder
     parser.add_argument(
         "--folder",
         metavar="GIT_REPO_PATH",
         help="Overrides the 'git_repo_path' specified in the config file for this run or pre-fills it during creation. This should be the absolute path to your local Git repository."
+    )
+    # THIS IS THE CRUCIAL PART: The --verbose flag definition
+    parser.add_argument(
+        "--verbose",
+        action="store_true", # This makes it a boolean flag: True if present, False if not
+        help="Enable verbose output for detailed logging of operations."
     )
 
     return parser.parse_args()
