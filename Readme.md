@@ -15,12 +15,12 @@ Before you dive in, make sure you have:
 ### **Installation**
 
 1. **Clone this repository** (or simply copy the files) to your local machine:  
-   git clone https://github.com/your-username/your-repo-name.git \# Replace with your actual repo URL  
-   cd your-repo-name
+   git clone https://github.com/ytugapse/gitbackup.git 
+   cd gitbackup
 
 2. Verify your file structure:  
    Your project should be organized like this:  
-   your\_project/  
+   gitbackup/  
    ├── main.py  
    ├── config.json  \# Or your custom config file name  
    └── core/  
