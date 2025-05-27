@@ -3,11 +3,9 @@
 _verbose = False
 
 # ANSI escape codes for colors
-# \033[...m is the general format for ANSI escape codes
-# 31m for red foreground, 36m for cyan foreground
-# 0m to reset all attributes (important!)
 COLOR_RED = "\033[31m"
 COLOR_CYAN = "\033[36m"
+COLOR_GREEN = "\033[32m" # NEW: Green color
 COLOR_RESET = "\033[0m"
 
 def set_verbose(verbose_flag):
@@ -34,15 +32,18 @@ def log(message, level='normal', task_name=None):
         log_message = f"{prefix}ERROR: {message}"
     elif level == 'step':
         color = COLOR_CYAN
-        log_message = f"{prefix}> {COLOR_RESET}{message}"
+        log_message = f"{prefix}{message}"
+    elif level == 'success': # NEW: Handle 'success' level with green color
+        color = COLOR_GREEN
+        log_message = f"{prefix}{message}"
     elif level == 'normal':
-        if not _verbose: # 'normal' messages only show if verbose is true, so skip if not
+        if not _verbose:
             return
         log_message = f"{prefix}INFO: {message}"
-    else: # Default for any unknown level, or if 'normal' and verbose is off
-        if not _verbose and level != 'error': # Only print if verbose or it's an error (which is handled above)
+    else: # Fallback for any unknown level or non-verbose normal messages
+        if not _verbose and level not in ['error', 'step', 'success']: # Only print if verbose or it's an always-visible level
             return
-        log_message = f"{prefix}INFO: {message}" # Fallback for other levels or non-verbose normal
+        log_message = f"{prefix}INFO: {message}"
 
     # Print the message with color, followed by reset to not affect subsequent output
     print(f"{color}{log_message}{COLOR_RESET}")
