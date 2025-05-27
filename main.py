@@ -19,7 +19,7 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
     branch/origin/folder from CLI arguments.
     Ensures the directory path exists and handles overwrite logic.
     """
-    log(f"--- Starting configuration file creation for task: '{name}' ---", level='step')
+    log(f"Starting configuration file creation for task: '{name}'", level='step')
     log(f"Target output path: '{output_filepath}'", level='normal')
 
     default_config = {
@@ -62,14 +62,14 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
     try:
         with open(output_filepath, 'w') as f:
             json.dump(default_config, f, indent=2)
-        # CHANGED: Log this message with 'success' level for green color
+        # Log this message with 'success' level for green color
         log(f"Successfully created configuration file: '{output_filepath}'", level='success')
         log("\nPlease edit this file with your specific paths and commands.", level='normal')
     except Exception as e:
         log(f"Error creating configuration file '{output_filepath}': {e}", level='error')
         sys.exit(1)
 
-    log(f"--- Finished configuration file creation for task: '{name}' ---", level='step')
+    log(f"Finished configuration file creation for task: '{name}'", level='step')
 
 
 if __name__ == "__main__":
@@ -158,12 +158,13 @@ if __name__ == "__main__":
         log(f"Error: JSON file '{config_file_path}' must contain a single JSON object (not a list or other type).", level='error')
         sys.exit(1)
 
-    log(f"--- Starting automated task from '{config_file_path}' ---", level='step')
+    log(f"Starting automated task from '{config_file_path}'", level='step')
 
     task_name = task.get("name", "Unnamed Task")
     command_line = task.get("command_line")
     git_commit_message = task.get("git_commit_message", f"Automated update for {task_name}")
 
+    # Moved these assignments BEFORE they are used in the log statements
     git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
     branch = args.branch if args.branch is not None else task.get("branch", "main")
     origin = args.origin if args.origin is not None else task.get("origin", "origin")
@@ -177,63 +178,71 @@ if __name__ == "__main__":
     else:
         log("  No pre-commit command specified.", level='normal')
     log(f"  Git Commit Message: '{git_commit_message}'", level='normal')
-    log("-" * 60, level='normal')
 
     # --- Pre-requisite checks ---
     if not git_repo_path:
         log(f"Error for '{task_name}': 'git_repo_path' is missing in config.json and not provided via --folder.", level='error')
-        log("--- Task aborted due to missing essential information. ---", level='error')
+        log(f"Task '{task_name}' aborted due to missing essential information.", level='error')
         sys.exit(1)
 
     if not os.path.isdir(git_repo_path) or not os.path.exists(os.path.join(git_repo_path, '.git')):
         log(f"Error for '{task_name}': Defined Git repository path '{git_repo_path}' is not a valid Git repository or does not exist.", level='error')
-        log("--- Task aborted as Git repository is not set up correctly. ---", level='error')
+        log(f"Task '{task_name}' aborted as Git repository is not set up correctly.", level='error')
         sys.exit(1)
 
     # --- Workflow Steps ---
 
-    log("\n--- Step 1: Performing initial Git Pull ---", level='step')
-    if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
-        log(f"--- Task '{task_name}' aborted: Initial Git Pull failed. ---", level='error')
+    log("Performing initial Git Pull", level='step')
+    if pull_updates(git_repo_path, branch=branch, task_name=task_name):
+        log(f"Initial Git Pull completed successfully.", level='success', task_name=task_name)
+    else:
+        log(f"Task '{task_name}' aborted: Initial Git Pull failed.", level='error')
         sys.exit(1)
 
-    log("\n--- Step 2: Executing command_line ---", level='step')
+    log("Executing command_line", level='step')
     if command_line:
-        if not execute_command(command_line, task_name):
-            log(f"--- Task '{task_name}' aborted: Command execution failed. ---", level='error')
+        if execute_command(command_line, task_name):
+            log(f"Command execution completed successfully.", level='success', task_name=task_name)
+        else:
+            log(f"Task '{task_name}' aborted: Command execution failed.", level='error')
             sys.exit(1)
     else:
         log("No command_line to execute.", level='normal', task_name=task_name)
 
-    log("\n--- Step 3: Checking for changes in Git Repository ---", level='step')
+    log("Checking for changes in Git Repository", level='step')
     changes_found = diff_changes(git_repo_path, task_name)
     if changes_found is None:
-        log(f"--- Task '{task_name}' aborted: Failed to check for Git differences. ---", level='error')
+        log(f"Task '{task_name}' aborted: Failed to check for Git differences.", level='error')
         sys.exit(1)
 
     commit_successful = False
     if changes_found:
-        log("\n--- Step 4: Changes detected. Performing Git Add and Commit ---", level='step')
+        log("Changes detected. Performing Git Add and Commit", level='step')
         if add_commit_changes(git_repo_path, git_commit_message, ".", task_name):
+            log(f"Git Add and Commit completed successfully.", level='success', task_name=task_name)
             commit_successful = True
         else:
-            log(f"--- Task '{task_name}' aborted: Git Add/Commit failed. ---", level='error')
+            log(f"Task '{task_name}' aborted: Git Add/Commit failed.", level='error')
             sys.exit(1)
     else:
-        log("\n--- Step 4: No changes detected. Skipping Git Add and Commit. ---", level='step')
+        log("No changes detected. Skipping Git Add and Commit.", level='step')
 
     if commit_successful:
-        log("\n--- Step 5: Commits made. Performing Git Push ---", level='step')
-        if not push_updates(git_repo_path, branch=branch, origin=origin, task_name=task_name):
-            log(f"--- Task '{task_name}' completed with warnings: Git Push failed. ---", level='error')
+        log("Commits made. Performing Git Push", level='step')
+        if push_updates(git_repo_path, branch=branch, origin=origin, task_name=task_name):
+            log(f"Git Push completed successfully.", level='success', task_name=task_name)
+        else:
+            log(f"Task '{task_name}' completed with warnings: Git Push failed.", level='error')
             sys.exit(1)
     else:
-        log("\n--- Step 5: No new commits to push. Skipping Git Push. ---", level='step')
+        log("No new commits to push. Skipping Git Push.", level='step')
 
 
-    log("\n--- Step 6: Performing final Git Pull (post-push sync) ---", level='step')
-    if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
-        log(f"--- Task '{task_name}' completed with warnings: Final Git Pull failed. ---", level='error')
+    log("Performing final Git Pull (post-push sync)", level='step')
+    if pull_updates(git_repo_path, branch=branch, task_name=task_name):
+        log(f"Final Git Pull completed successfully.", level='success', task_name=task_name)
+    else:
+        log(f"Task '{task_name}' completed with warnings: Final Git Pull failed.", level='error')
         sys.exit(1)
 
-    log(f"\n--- Task '{task_name}' completed successfully! ---", level='step')
+    log(f"Task '{task_name}' completed successfully!", level='success')
