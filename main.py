@@ -7,7 +7,7 @@ from core.cli_parser import parse_arguments
 
 # Import functions from our logic modules from the 'core' subdirectory
 from core.command_logic import execute_command
-from core.git_logic import pull_updates, diff_changes, add_commit_changes
+from core.git_logic import pull_updates, diff_changes, add_commit_changes, push_updates # <-- Added push_updates
 
 def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, folder_arg=None):
     """
@@ -18,7 +18,7 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
     # Use provided arguments, otherwise default placeholders
     default_config = {
         "name": name,
-        "origin": origin_arg if origin_arg is not None else "Your_Git_Host (e.g., GitHub, GitLab)",
+        "origin": origin_arg if origin_arg is not None else "origin", # Changed default to 'origin' for new configs
         "branch": branch_arg if branch_arg is not None else "main",
         "git_repo_path": folder_arg if folder_arg is not None else os.path.abspath(os.path.join(os.getcwd(), "path/to/your/local_git_repo")), # Placeholder
         "command_line": "echo 'Your command here (e.g., npm run build, python script.py)'",
@@ -61,7 +61,7 @@ if __name__ == "__main__":
             output_filepath = args.output
         else:
             output_filepath = f"{task_name_for_creation.replace(' ', '_').lower()}.json"
-            output_filepath = os.path.abspath(output_filepath) # Ensure it's an absolute path if just a filename
+            output_filepath = os.path.abspath(output_filepath)
 
         # Pass all relevant CLI arguments to create_config_file
         create_config_file(
@@ -69,9 +69,9 @@ if __name__ == "__main__":
             output_filepath,
             branch_arg=args.branch,
             origin_arg=args.origin,
-            folder_arg=args.folder # Pass CLI folder argument
+            folder_arg=args.folder
         )
-        sys.exit(0) # Exit after creating the file
+        sys.exit(0)
 
     # --- Handle running a task from config_file (existing logic) ---
     config_file_path = args.config_file
@@ -157,18 +157,33 @@ if __name__ == "__main__":
         sys.exit(1)
 
     # 4. Git Add + Commit (if changes found)
+    commit_successful = False # Flag to track if commit happened
     if changes_found:
         print("\n--- Step 4: Changes detected. Performing Git Add and Commit ---")
-        if not add_commit_changes(git_repo_path, git_commit_message, ".", task_name):
+        if add_commit_changes(git_repo_path, git_commit_message, ".", task_name):
+            commit_successful = True
+        else:
             print(f"--- Task '{task_name}' aborted: Git Add/Commit failed. ---")
             sys.exit(1)
     else:
         print("\n--- Step 4: No changes detected. Skipping Git Add and Commit. ---")
 
-    # 5. Final Git Pull
-    print("\n--- Step 5: Performing final Git Pull ---")
+    # 5. Git Push (if a commit just occurred)
+    if commit_successful:
+        print("\n--- Step 5: Commits made. Performing Git Push ---")
+        if not push_updates(git_repo_path, branch=branch, origin=origin, task_name=task_name):
+            print(f"--- Task '{task_name}' completed with warnings: Git Push failed. ---")
+            sys.exit(1) # Consider if you want to exit on push failure or just warn
+    else:
+        print("\n--- Step 5: No new commits to push. Skipping Git Push. ---")
+
+
+    # 6. Final Git Pull (Moved to Step 6)
+    # This step ensures the local repo is fully synced after your push,
+    # in case other changes landed while your script was running.
+    print("\n--- Step 6: Performing final Git Pull (post-push sync) ---")
     if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
         print(f"--- Task '{task_name}' completed with warnings: Final Git Pull failed. ---")
-        sys.exit(1)
+        sys.exit(1) # Or just warn, depending on desired strictness
 
     print(f"\n--- Task '{task_name}' completed successfully! ---")
