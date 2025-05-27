@@ -32,7 +32,7 @@ def log(message, level='normal', task_name=''):
     if level == 'step' or level == 'error':
         # Step and error messages are always printed
         print(message)
-    elif _VERBOSE:
+    elif _VERBOSE: # <--- This is the crucial line for filtering 'normal' logs
         # Normal messages are only printed if verbose mode is enabled
         # If task_name is provided, prepend the formatted prefix
         print(f"{prefix}{message}" if task_name else message)

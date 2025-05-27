@@ -1,103 +1,112 @@
 import subprocess
 import os
+from core.logger import log # Ensure you're importing the log function
 
 def run_git_command(repo_path, command_args, task_name, capture_output=False):
     """
     Helper function to run a git command.
-    Captures and prints stdout/stderr for better debugging.
-    Returns True for success, None for failure.
-    If capture_output is True, returns stdout string on success.
+    Logs command execution and output at 'normal' level, errors at 'error' level.
     """
-    full_command = ["git"] + command_args
-    print(f"  [{task_name}] Executing Git command: {' '.join(full_command)} in '{repo_path}'")
+    # This message will only show in verbose mode
+    log(f"Executing Git command: {' '.join(command_args)} in '{repo_path}'", level='normal', task_name=task_name)
     try:
         process = subprocess.run(
-            full_command,
+            ["git"] + command_args,
             cwd=repo_path,
-            capture_output=True, # Always capture to be able to print errors/output
-            text=True,           # Decode stdout/stderr as text
-            check=False          # Do not raise CalledProcessError automatically; we handle returncode
+            capture_output=True,
+            text=True,
+            check=False
         )
 
-        # Print standard output if any
         if process.stdout:
-            print(f"  [{task_name}] Git STDOUT:\n{process.stdout.strip()}")
-
-        # Print standard error if any
+            # Git STDOUT will only show in verbose mode
+            log(f"Git STDOUT:\n{process.stdout.strip()}", level='normal', task_name=task_name)
         if process.stderr:
-            print(f"  [{task_name}] Git STDERR:\n{process.stderr.strip()}")
+            # Git STDERR will only show in verbose mode, unless it's a critical error
+            log(f"Git STDERR:\n{process.stderr.strip()}", level='normal', task_name=task_name)
 
         if process.returncode != 0:
-            print(f"  [{task_name}] Git command FAILED with exit code {process.returncode}.")
+            # Command failures are considered errors and will always be shown
+            log(f"Git command FAILED with exit code {process.returncode}.", level='error', task_name=task_name)
             return None # Indicate failure
-
-        return process.stdout.strip() if capture_output else True # Return output or simply True for success
+        return process.stdout.strip() if capture_output else True
     except FileNotFoundError:
-        print(f"  [{task_name}] Error: 'git' command not found. Please ensure Git is installed and in your PATH.")
+        log(f"Error: 'git' command not found. Please ensure Git is installed and in your PATH.", level='error', task_name=task_name)
         return None
     except Exception as e:
-        print(f"  [{task_name}] An unexpected error occurred while running Git command: {e}")
+        log(f"An unexpected error occurred while running Git command: {e}", level='error', task_name=task_name)
         return None
 
 def pull_updates(repo_path, branch, task_name):
     """
     Performs a git pull on the specified branch and origin.
+    Logs at 'normal' level for non-critical information.
     """
-    print(f"  [{task_name}] Pulling updates for branch '{branch}'...")
-    # Assuming 'origin' is the default remote, but you can pass origin in command_args if needed
+    # This message will only show in verbose mode
+    log(f"Pulling updates for branch '{branch}'...", level='normal', task_name=task_name)
     result = run_git_command(repo_path, ["pull", "origin", branch], task_name)
     if result is None:
-        print(f"  [{task_name}] Git Pull failed for branch '{branch}'.")
+        log(f"Git Pull failed for branch '{branch}'.", level='error', task_name=task_name)
         return False
-    print(f"  [{task_name}] Git Pull successful.")
+    # This message will only show in verbose mode
+    log(f"Git Pull successful.", level='normal', task_name=task_name)
     return True
 
 def diff_changes(repo_path, task_name):
     """
     Checks for any changes (modified, untracked, deleted, etc.) in the Git repository.
-    Returns True if changes are found, False if no changes, None on error.
+    Logs at 'normal' level for non-critical information.
     """
-    print(f"  [{task_name}] Checking for pending changes using 'git status --porcelain'...")
+    # This message will only show in verbose mode
+    log(f"Checking for pending changes using 'git status --porcelain'...", level='normal', task_name=task_name)
     output = run_git_command(repo_path, ["status", "--porcelain"], task_name, capture_output=True)
 
     if output is None:
-        print(f"  [{task_name}] Error during Git status check.")
+        log(f"Error during Git status check.", level='error', task_name=task_name)
         return None
     elif output:
-        print(f"  [{task_name}] Changes detected.")
+        # This message will only show in verbose mode
+        log(f"Changes detected.", level='normal', task_name=task_name)
         return True
     else:
-        print(f"  [{task_name}] No changes detected.")
+        # This message will only show in verbose mode
+        log(f"No changes detected.", level='normal', task_name=task_name)
         return False
 
 def add_commit_changes(repo_path, commit_message, files_to_add, task_name):
     """
     Stages specified files and commits them to the repository.
+    Logs at 'normal' level for non-critical information.
     """
-    print(f"  [{task_name}] Staging changes ('{files_to_add}')...")
+    # This message will only show in verbose mode
+    log(f"Staging changes ('{files_to_add}')...", level='normal', task_name=task_name)
     add_result = run_git_command(repo_path, ["add", files_to_add], task_name)
     if add_result is None:
-        print(f"  [{task_name}] Git Add failed.")
+        log(f"Git Add failed.", level='error', task_name=task_name)
         return False
 
-    print(f"  [{task_name}] Committing changes with message: '{commit_message}'...")
+    # This message will only show in verbose mode
+    log(f"Committing changes with message: '{commit_message}'...", level='normal', task_name=task_name)
     commit_result = run_git_command(repo_path, ["commit", "-m", commit_message], task_name)
     if commit_result is None:
-        print(f"  [{task_name}] Git Commit failed.")
+        log(f"Git Commit failed.", level='error', task_name=task_name)
         return False
 
-    print(f"  [{task_name}] Git Add and Commit successful.")
+    # This message will only show in verbose mode
+    log(f"Git Add and Commit successful.", level='normal', task_name=task_name)
     return True
 
-# New function to push changes
 def push_updates(repo_path, branch, origin, task_name):
     """
     Pushes committed changes to the specified remote origin and branch.
+    Logs at 'normal' level for non-critical information.
     """
-    print(f"  [{task_name}] Pushing changes to '{origin}/{branch}'...")
+    # This message will only show in verbose mode
+    log(f"Pushing changes to '{origin}/{branch}'...", level='normal', task_name=task_name)
     push_result = run_git_command(repo_path, ["push", origin, branch], task_name)
     if push_result is None:
-        print(f"  [{task_name}] Git Push failed to '{origin}/{branch}'.")
+        log(f"Git Push failed to '{origin}/{branch}'.", level='error', task_name=task_name)
         return False
-    print(f"  [{task_name}] Git Push successful.")
+    # This message will only show in verbose mode
+    log(f"Git Push successful.", level='normal', task_name=task_name)
     return True
