@@ -1,0 +1,8 @@
+{
+  "name": "git-backup",
+  "origin": "https://github.com/tugapse/gitbackup.git",
+  "branch": "develop",
+  "git_repo_path": "/home/fabio/Code/backup-git/",
+  "command_line": "echo 'Your command here (e.g., npm run build, python script.py)'",
+  "git_commit_message": "Automated update for git-backup"
+}
