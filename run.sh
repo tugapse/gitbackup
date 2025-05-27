@@ -1,16 +1,10 @@
 #!/bin/bash
 
-# This script activates the Python virtual environment and runs main.py.
-# All arguments passed to this script will be forwarded to main.py.
+# Get the directory where the script itself is located
+# dirname "$0" gets the directory of the script
+# readlink -f resolves any symlinks and gives the absolute path
+SCRIPT_DIR=$(dirname "$(readlink -f "$0")")
 
-# "Source... thing": Activate the virtual environment
-# This ensures that main.py runs with the correct Python interpreter and dependencies.
-source .env/bin/activate
-
-# Execute the main Python script, passing all arguments
-python main.py "$@"
-
-# Optional: Deactivate the virtual environment.
-# For simple one-off runs like this, it's often omitted as the venv
-# only affects this script's subshell, but it's good practice for longer sessions.
-# deactivate
+# Execute the main.py script using python3,
+# passing all arguments ($@) from this script to main.py
+python3 "${SCRIPT_DIR}/main.py" "$@"
