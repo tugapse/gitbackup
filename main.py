@@ -229,12 +229,12 @@ if __name__ == "__main__":
             log(f"--- Task '{task_name}' completed with warnings: Git Push failed. ---", level='error')
             sys.exit(1)
     else:
-        log("\n--- Step 5: No new commits to push. Skipping Git Push. ---", level='step')
+        log("--- Step 5: No new commits to push. Skipping Git Push. ---", level='step')
 
 
-    log("\n--- Step 6: Performing final Git Pull (post-push sync) ---", level='step')
+    log("--- Step 6: Performing final Git Pull (post-push sync) ---", level='step')
     if not pull_updates(git_repo_path, branch=branch, task_name=task_name):
         log(f"--- Task '{task_name}' completed with warnings: Final Git Pull failed. ---", level='error')
         sys.exit(1)
 
-    log(f"\n--- Task '{task_name}' completed successfully! ---", level='step')
+    log(f"--- Task '{task_name}' completed successfully! ---", level='step')
