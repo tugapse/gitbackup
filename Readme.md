@@ -15,7 +15,7 @@ Before you dive in, make sure you have:
 ### **Installation**
 
 1. **Clone this repository** (or simply copy the files) to your local machine:  
-   git clone https://github.com/ytugapse/gitbackup.git 
+   git clone https://github.com/tugapse/gitbackup.git 
    cd gitbackup
 
 2. Verify your file structure:  
@@ -24,11 +24,11 @@ Before you dive in, make sure you have:
    ├── main.py  
    ├── config.json  \# Or your custom config file name  
    └── core/  
-       ├── \_\_init\_\_.py  
-       ├── cli\_parser.py  
-       ├── command\_logic.py  
-       ├── git\_logic.py  
-       └── logger.py
+        ├── \_\_init\_\_.py  
+        ├── cli\_parser.py  
+        ├── command\_logic.py  
+        ├── git\_logic.py  
+        └── logger.py
 
 ## **🛠️ Configuration**
 
@@ -161,10 +161,6 @@ The script executes a well-defined, sequential workflow for each task:
 
 ## **🐛 Troubleshooting**
 
-* **AttributeError: 'Namespace' object has no attribute 'verbose'**: This error indicates that the \--verbose argument hasn't been correctly defined in core/cli\_parser.py. Please ensure that file matches the provided code exactly.  
 * **Error: 'git' command not found**: This usually means Git isn't installed on your system, or its executable isn't added to your system's PATH.  
 * **Error: ... 'git\_repo\_path' is missing**: Verify that the git\_repo\_path field is correctly set in your JSON configuration file, or that you've provided it via the \--folder command-line argument.  
 * **Error: ... not a valid Git repository**: The path you've provided for git\_repo\_path (or \--folder) either doesn't exist or isn't a recognized Git repository.  
-* **Unexpected verbose output**: If you're seeing too much detail without the \--verbose flag, double-check these:  
-  * Ensure all log() calls in core/git\_logic.py and core/command\_logic.py use level='normal' for messages you want hidden by default.  
-  * Verify that set\_verbose(args.verbose) is called correctly and early in your main.py script.
