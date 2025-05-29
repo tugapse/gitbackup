@@ -10,31 +10,41 @@ def parse_arguments():
         description="Automate Git-centric workflows or create new config files."
     )
 
-    # --- Mutually exclusive group for action: run task or create config ---
+    # --- Mutually exclusive group for core actions: run task OR create config ---
+    # --edit is *not* in this group because it modifies the behavior of task_identifier/--json
     group = parser.add_mutually_exclusive_group()
 
-    # Positional argument: can be a task name or a direct config file path
+    # Positional argument: can be a task name or a direct config file path (for running OR editing)
     group.add_argument(
         "task_identifier",
         nargs='?', # Makes it optional, as --create or --json can be used instead
         help="The name of the task (e.g., 'my_backup') which resolves to 'config_dir/my_backup.json', OR a direct path to a config file (e.g., 'path/to/my_config.json')."
     )
     
-    # --create flag: for creating a new config file
+    # --create flag: for creating a new config file (exclusive with task_identifier)
     group.add_argument(
         "--create",
         metavar="TASK_NAME",
         help="Create a new JSON configuration file with the given task name."
     )
 
-    # --- General options (not mutually exclusive with above) ---
+    # --- General options (can be combined with task_identifier or --json, but not --create) ---
 
-    # --json flag: explicitly load from a file path (highest precedence)
+    # --json flag: explicitly load from a file path (highest precedence for task/edit)
     parser.add_argument(
         "--json",
         metavar="FILEPATH",
-        help="Explicitly specify the full path to the JSON configuration file to load. This overrides the positional 'task_identifier' if it was a task name."
+        help="Explicitly specify the full path to the JSON configuration file to load/edit. This overrides the positional 'task_identifier' if it was a task name."
     )
+
+    # NEW: --edit flag (moved out of the mutually exclusive group)
+    # It applies to the file identified by task_identifier or --json
+    parser.add_argument(
+        "--edit",
+        action="store_true",
+        help="Open the identified JSON configuration file in the default text editor. Requires a 'task_identifier' or '--json' path."
+    )
+
 
     # --config-dir: base directory for task name lookups
     default_config_dir = os.path.join(os.path.expanduser('~'), 'git_automation_configs')
@@ -49,7 +59,7 @@ def parse_arguments():
     parser.add_argument(
         "-o", "--output",
         metavar="FILEPATH",
-        help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME_MMDDHHMMSS.json in the default config directory."
+        help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the default config directory."
     )
     
     # Git override arguments (branch, origin, folder)
@@ -74,11 +84,18 @@ def parse_arguments():
         help="Enable verbose output for detailed logging of operations."
     )
 
-    # NEW: --overwrite flag for creation
+    # Overwrite flag for creation
     parser.add_argument(
         "--overwrite",
-        action="store_true", # This makes it a boolean flag
+        action="store_true",
         help="When creating a configuration file, overwrite it if it already exists."
+    )
+
+    # --initialize flag
+    parser.add_argument(
+        "--initialize",
+        action="store_true",
+        help="Initialize the Git repository if it does not exist at the specified 'git_repo_path'."
     )
 
     return parser.parse_args()

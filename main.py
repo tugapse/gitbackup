@@ -1,14 +1,14 @@
 import os
 import json
 import sys
-# No need to import datetime here anymore for timestamps on filenames
+import subprocess # Added for opening files with default editor
 
 # Import our custom argument parser
 from core.cli_parser import parse_arguments
 
 # Import functions from our logic modules
 from core.command_logic import execute_command
-from core.git_logic import pull_updates, diff_changes, add_commit_changes, push_updates
+from core.git_logic import pull_updates, diff_changes, add_commit_changes, push_updates, initialize_repo, checkout_or_create_branch
 
 # Import the new logger functions
 from core.logger import set_verbose, log
@@ -90,6 +90,18 @@ if __name__ == "__main__":
             log(f"Error creating default config directory '{effective_config_base_dir}': {e}", level='error')
             sys.exit(1)
 
+    # --- Determine the configuration file path for running/editing a task ---
+    # This logic is shared between running a task and editing one.
+    config_file_path = None
+
+    if args.json:
+        config_file_path = args.json
+    elif args.task_identifier:
+        if args.task_identifier.lower().endswith(".json"):
+            config_file_path = args.task_identifier
+        else:
+            config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
+    
     # --- Handle --create command ---
     if args.create:
         task_name_for_creation = args.create
@@ -109,20 +121,41 @@ if __name__ == "__main__":
             overwrite_flag=args.overwrite
         )
         sys.exit(0)
+    
+    # --- Handle --edit command ---
+    if args.edit:
+        if not config_file_path: # Need a file to edit
+            log("Error: No task identifier or --json path provided for editing.", level='error')
+            log("Usage: python main.py my_task --edit OR python main.py --json /path/to/my_config.json --edit", level='normal')
+            sys.exit(1)
 
-    # --- Determine the configuration file path for running a task ---
-    config_file_path = None
+        if not os.path.exists(config_file_path):
+            log(f"Error: Configuration file '{config_file_path}' not found for editing.", level='error')
+            sys.exit(1)
 
-    if args.json:
-        config_file_path = args.json
-    elif args.task_identifier:
-        if args.task_identifier.lower().endswith(".json"):
-            config_file_path = args.task_identifier
-        else:
-            config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
+        log(f"Attempting to open '{config_file_path}' in default editor...", level='step')
+        try:
+            if sys.platform == "win32":
+                os.startfile(config_file_path) # Windows specific
+            elif sys.platform == "darwin": # macOS
+                subprocess.run(["open", config_file_path], check=True)
+            else: # Linux and other Unix-like systems
+                subprocess.run(["xdg-open", config_file_path], check=True)
+            log(f"Successfully launched editor for '{config_file_path}'.", level='success')
+        except FileNotFoundError as e:
+            log(f"Error: Default editor command not found. Ensure '{e.filename}' is in your PATH.", level='error')
+            sys.exit(1)
+        except subprocess.CalledProcessError as e:
+            log(f"Error opening file with default editor: {e}", level='error')
+            sys.exit(1)
+        except Exception as e:
+            log(f"An unexpected error occurred while trying to open the file: {e}", level='error')
+            sys.exit(1)
+        
+        sys.exit(0) # Exit after opening the file for editing
 
-    # If no config identifier or --json was provided, then we can't run a task
-    if not config_file_path:
+    # --- If neither --create nor --edit, then proceed to run a task ---
+    if not config_file_path: # If no config identifier or --json was provided, then we can't run a task
         log("Error: No task identifier or --json path provided to run a task.", level='error')
         log("Usage Examples:", level='normal')
         log("  Run by task name (e.g., 'my_daily_backup' in default config dir):", level='normal')
@@ -137,9 +170,12 @@ if __name__ == "__main__":
         log("    python main.py --create \"New Workflow\"", level='normal')
         log("  Create a new config and overwrite if exists:", level='normal')
         log("    python main.py --create \"MyExistingConfig\" --overwrite", level='normal')
+        log("  Initialize a new Git repo and run a task:", level='normal')
+        log("    python main.py my_new_repo_task --folder /tmp/my_new_repo --initialize --branch dev --origin https://github.com/user/new-repo.git", level='normal')
+        log("  Edit an existing config file:", level='normal')
+        log("    python main.py my_daily_backup --edit", level='normal') # NEW example
         sys.exit(1)
 
-    # From here downwards, the rest of your main.py logic should remain the same
     if not os.path.exists(config_file_path):
         log(f"Error: Configuration file '{config_file_path}' not found.", level='error')
         sys.exit(1)
@@ -164,7 +200,6 @@ if __name__ == "__main__":
     command_line = task.get("command_line")
     git_commit_message = task.get("git_commit_message", f"Automated update for {task_name}")
 
-    # Moved these assignments BEFORE they are used in the log statements
     git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
     branch = args.branch if args.branch is not None else task.get("branch", "main")
     origin = args.origin if args.origin is not None else task.get("origin", "origin")
@@ -179,18 +214,41 @@ if __name__ == "__main__":
         log("  No pre-commit command specified.", level='normal')
     log(f"  Git Commit Message: '{git_commit_message}'", level='normal')
 
-    # --- Pre-requisite checks ---
+    # --- Pre-requisite checks (Modified for --initialize) ---
+    git_dir_exists = os.path.exists(os.path.join(git_repo_path, '.git'))
+    
     if not git_repo_path:
         log(f"Error for '{task_name}': 'git_repo_path' is missing in config.json and not provided via --folder.", level='error')
         log(f"Task '{task_name}' aborted due to missing essential information.", level='error')
         sys.exit(1)
 
-    if not os.path.isdir(git_repo_path) or not os.path.exists(os.path.join(git_repo_path, '.git')):
-        log(f"Error for '{task_name}': Defined Git repository path '{git_repo_path}' is not a valid Git repository or does not exist.", level='error')
-        log(f"Task '{task_name}' aborted as Git repository is not set up correctly.", level='error')
+    if not git_dir_exists: # If the .git directory doesn't exist
+        if args.initialize:
+            log(f"Git repository not found at '{git_repo_path}'. Attempting to initialize...", level='step')
+            # Pass the origin URL if available from config or CLI
+            if not initialize_repo(git_repo_path, origin_url=origin, task_name=task_name):
+                log(f"Task '{task_name}' aborted: Git repository initialization failed.", level='error')
+                sys.exit(1)
+            log(f"Git repository initialized successfully.", level='success', task_name=task_name)
+        else:
+            log(f"Error for '{task_name}': Defined Git repository path '{git_repo_path}' is not a valid Git repository or does not exist.", level='error')
+            log(f"To initialize it, use the --initialize flag.", level='error')
+            log(f"Task '{task_name}' aborted as Git repository is not set up correctly.", level='error')
+            sys.exit(1)
+    else: # If the .git directory already exists
+        log(f"Git repository found at '{git_repo_path}'.", level='normal', task_name=task_name)
+        # Even if --initialize is present, if .git exists, we don't re-init.
+        # But we still want to make sure the desired branch is checked out.
+
+    # Checkout or create the specified branch after ensuring the repo is initialized/exists
+    # This step is crucial before attempting any pulls or pushes on a specific branch.
+    if not checkout_or_create_branch(git_repo_path, branch, origin, task_name):
+        log(f"Task '{task_name}' aborted: Failed to checkout or create branch '{branch}'.", level='error')
         sys.exit(1)
 
+
     # --- Workflow Steps ---
+    # The rest of the workflow steps remain the same, but now they operate on the correct branch.
 
     log("Performing initial Git Pull", level='step')
     if pull_updates(git_repo_path, branch=branch, task_name=task_name):
