@@ -29,8 +29,8 @@ Before you dive in, make sure you have:
        ├── command\_logic.py  
        ├── git\_logic.py  
        ├── logger.py  
-       ├── config\_operations.py \# New: For config creation/management  
-       └── workflow\_logic.py    \# New: For the main workflow
+       ├── config\_operations.py \# For config creation/management  
+       └── workflow\_logic.py    \# For the main workflow
 
 3. **Set up a Python Virtual Environment** (highly recommended):  
    python3 \-m venv venv  
@@ -46,15 +46,15 @@ The script uses straightforward JSON files to define each automated task. By def
 
 ### **Creating a New Configuration File (--create)**
 
-You can generate a new configuration file with default settings right from your terminal.  
+You can generate a new configuration file with default settings directly from your terminal.  
 \# Creates '\~/git\_automation\_configs/my\_first\_git\_task.json'  
 python main.py \--create "My First Git Task"
 
 \# Creates 'my\_custom\_task.json' in the current directory  
 python main.py \--create "My Custom Task" \-o my\_custom\_task.json
 
-* \--create "TASK\_NAME": This initiates the creation of a new config file, using TASK\_NAME as its identifier.  
-* \-o FILEPATH: (Optional) Specifies the output filename for your config. If you omit this, the file will be named task\_name.json (e.g., my\_first\_git\_task.json) and placed in the default \~/git\_automation\_configs/ directory.
+* \--create "TASK\_NAME": Initiates the creation of a new config file, using TASK\_NAME as its identifier.  
+* \-o FILEPATH: (Optional) Specifies the output filename for your config. If omitted, the file will be named task\_name.json (e.g., my\_first\_git\_task.json) and placed in the default \~/git\_automation\_configs/ directory.
 
 After creation, a file like my\_first\_git\_task.json will appear. You'll need to **edit it** to fit your project:  
 // my\_first\_git\_task.json  
@@ -69,7 +69,7 @@ After creation, a file like my\_first\_git\_task.json will appear. You'll need t
 
 #### **Overwriting Existing Configs**
 
-By default, the script will prevent overwriting an existing configuration file. To force an overwrite, use the \--overwrite flag:  
+By default, the script prevents overwriting an existing configuration file. To force an overwrite, use the \--overwrite flag:  
 \# This will overwrite 'my\_config.json' if it exists  
 python main.py \--create "My Config" \-o my\_config.json \--overwrite
 
@@ -102,7 +102,7 @@ Listing all configured tasks in '/home/user/git\_automation\_configs':
 \- Dev Branch Workflow \- develop  
   /home/user/my\_dev\_project
 
-### **Editing Your Configuration**
+### **Key Configuration Fields**
 
 Open your generated JSON file (e.g., my\_first\_git\_task.json) and carefully **modify these key fields**:
 
@@ -190,32 +190,32 @@ The script provides clear, color-coded output to suit your needs:
     Pre-commit Command: 'echo "hello"'  
     Git Commit Message: 'Automated update for My First Git Task'
 
-  \[My First Git Task\] INFO: Git repository found at '/home/user/Code/my-repo'.  
-  \[My First Git Task\] STEP: Checking out or creating branch 'main'...  
-  \[My First Git Task\] INFO: Fetching from remote 'origin' to update branch list...  
-  \[My First Git Task\] INFO: Executing Git command: git fetch origin in '/home/user/Code/my-repo'  
-  \[My First Git Task\] INFO: Git STDOUT:  
+  \[My First Git Task\] Git repository found at '/home/user/Code/my-repo'.  
+  \[My First Git Task\] Checking out or creating branch 'main'...  
+  \[My First Git Task\] Fetching from remote 'origin' to update branch list...  
+  \[My First Git Task\] Executing Git command: git fetch origin in '/home/user/Code/my-repo'  
+  \[My First Git Task\] Git STDOUT:  
   From github.com:user/repo  
    \* \[new branch\]      dev        \-\> origin/dev  
-  \[My First Git Task\] INFO: Branch 'main' found on remote 'origin'.  
-  \[My First Git Task\] INFO: Branch 'main' found locally.  
-  \[My First Git Task\] INFO: Attempting to checkout existing branch 'main'...  
-  \[My First Git Task\] INFO: Executing Git command: git checkout main in '/home/user/Code/my-repo'  
-  \[My First Git Task\] INFO: Git STDOUT:  
+  \[My First Git Task\] Branch 'main' found on remote 'origin'.  
+  \[My First Git Task\] Branch 'main' found locally.  
+  \[My First Git Task\] Attempting to checkout existing branch 'main'...  
+  \[My First Git Task\] Executing Git command: git checkout main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] Git STDOUT:  
   Already on 'main'  
   Your branch is up to date with 'origin/main'.  
-  \[My First Git Task\] INFO: Successfully checked out branch 'main'.  
-  \[My First Git Task\] INFO: Executing Git command: git branch \--set-upstream-to origin/main main in '/home/user/Code/my-repo'  
-  \[My First Git Task\] INFO: Git STDOUT:  
+  \[My First Git Task\] Successfully checked out branch 'main'.  
+  \[My First Git Task\] Executing Git command: git branch \--set-upstream-to origin/main main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] Git STDOUT:  
   Branch 'main' set up to track remote branch 'main' from 'origin'.  
-  \[My First Git Task\] SUCCESS: Branch operation for 'main' completed.
+  \[My First Git Task\] Branch operation for 'main' completed.
 
   Performing initial Git Pull  
-  \[My First Git Task\] INFO: Pulling updates for branch 'main'...  
-  \[My First Git Task\] INFO: Executing Git command: git pull origin main in '/home/user/Code/my-repo'  
-  \[My First Git Task\] INFO: Git STDOUT:  
+  \[My First Git Task\] Pulling updates for branch 'main'...  
+  \[My First Git Task\] Executing Git command: git pull origin main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] Git STDOUT:  
   Already up to date.  
-  \[My First Git Task\] INFO: Git Pull successful.  
+  \[My First Git Task\] Git Pull successful.  
   Initial Git Pull completed successfully.  
   ... (and so on for all steps, including Git STDOUT/STDERR details)
 
@@ -247,7 +247,7 @@ These scripts will activate your virtual environment, clean previous builds, and
 
 ## **🐛 Troubleshooting**
 
-* **AttributeError: 'Namespace' object has no attribute 'verbose'**: This error indicates that the \--verbose argument hasn't been correctly defined in core/cli\_parser.py. Please ensure that file matches the provided code exactly.  
+  
 * **Error: 'git' command not found**: This usually means Git isn't installed on your system, or its executable isn't added to your system's PATH.  
 * **Error: ... 'git\_repo\_path' is missing**: Verify that the git\_repo\_path field is correctly set in your JSON configuration file, or that you've provided it via the \--folder command-line argument.  
 * **Error: ... not a valid Git repository**: The path you've provided for git\_repo\_path (or \--folder) either doesn't exist or isn't a recognized Git repository. Use \--initialize if you want the script to set it up for you.  
