@@ -184,10 +184,6 @@ def checkout_or_create_branch(repo_path, branch_name, origin_name, task_name):
             return False
         log(f"Successfully checked out branch '{branch_name}'.", level='normal', task_name=task_name)
         
-        # If it exists remotely, try to set up upstream tracking
-        if branch_exists_remotely and not run_git_command(repo_path, ["branch", "--set-upstream-to", f"{origin_name}/{branch_name}", branch_name], task_name):
-             log(f"Warning: Failed to set upstream for '{branch_name}' to '{origin_name}/{branch_name}'.", level='warning', task_name=task_name)
-
     else:
         # If it doesn't exist remotely or locally, create it
         log(f"Creating new local branch '{branch_name}'...", level='normal', task_name=task_name)
