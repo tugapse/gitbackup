@@ -1,2 +1,8 @@
-/*/*.pyc
+*/*.pyc
 *.pyc
+core/__pycache__/cli_parser.cpython-313.pyc
+core/__pycache__/command_logic.cpython-313.pyc
+core/__pycache__/git_logic.cpython-313.pyc
+core/__pycache__/logger.cpython-313.pyc
+*__pycache__
+*__pycache__/*

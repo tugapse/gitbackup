@@ -1,41 +1,56 @@
-import subprocess
-import sys
-from core.logger import log # Import the new logger
+# core/command_logic.py
 
-def execute_command(command, task_name):
+import subprocess
+import os # Import os for path handling if needed, though subprocess.run handles cwd directly
+from core.logger import log
+
+def execute_command(command, task_name=None, cwd=None): # Added cwd=None to the signature
     """
-    Executes a shell command.
-    Logs command execution and output at 'normal' level, errors at 'error' level.
+    Executes a given shell command.
+
+    Args:
+        command (str): The shell command to execute.
+        task_name (str, optional): The name of the task for logging purposes. Defaults to None.
+        cwd (str, optional): The current working directory for the command. Defaults to None (current script's CWD).
+
+    Returns:
+        bool: True if the command executed successfully, False otherwise.
     """
-    # This message will only show in verbose mode
-    log(f"Attempting to execute command: '{command}'", level='normal', task_name=task_name)
     try:
-        # Use shell=True for simple commands; for more complex, consider shell=False and command parsing
-        process = subprocess.run(
+        log(f"Executing command: {command}", level='normal', task_name=task_name)
+        
+        # Ensure cwd is a valid path if provided
+        if cwd and not os.path.isdir(cwd):
+            log(f"Warning: Specified command working directory '{cwd}' does not exist.", level='warning', task_name=task_name)
+            # Decide if you want to proceed without setting cwd or exit.
+            # For now, we'll let subprocess.run handle it, which might error if it's critical.
+            # Or you could set cwd=None here to use default, or raise an error.
+            # For robustness, it's better to explicitly check and potentially exit or default.
+            # Let's add a robust check here:
+            log(f"Error: Command working directory '{cwd}' does not exist.", level='error', task_name=task_name)
+            return False
+
+        result = subprocess.run(
             command,
             shell=True,
-            capture_output=True,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            check=False # We handle the return code ourselves
+            cwd=cwd # Pass the cwd argument here
         )
-
-        if process.stdout:
-            # Command STDOUT will only show in verbose mode
-            log(f"Command STDOUT:\n{process.stdout.strip()}", level='normal', task_name=task_name)
-        if process.stderr:
-            # Command STDERR will only show in verbose mode
-            log(f"Command STDERR:\n{process.stderr.strip()}", level='normal', task_name=task_name)
-
-        if process.returncode != 0:
-            # Command failures are considered errors and will always be shown
-            log(f"Command FAILED with exit code {process.returncode}.", level='error', task_name=task_name)
-            return False
-        else:
-            # This message will only show in verbose mode
-            log(f"Command executed successfully.", level='normal', task_name=task_name)
-            return True
+        if result.stdout:
+            log(f"Command STDOUT:\n{result.stdout}", level='normal', task_name=task_name)
+        return True
+    except subprocess.CalledProcessError as e:
+        log(f"Command FAILED with exit code {e.returncode}.", level='error', task_name=task_name)
+        if e.stdout:
+            log(f"Command STDOUT:\n{e.stdout}", level='error', task_name=task_name)
+        if e.stderr:
+            log(f"Command STDERR:\n{e.stderr}", level='error', task_name=task_name)
+        return False
     except FileNotFoundError:
-        log(f"Error: The command '{command.split()[0]}' was not found.", level='error', task_name=task_name)
+        log(f"Error: Command '{command.split()[0]}' not found.", level='error', task_name=task_name)
         return False
     except Exception as e:
         log(f"An unexpected error occurred during command execution: {e}", level='error', task_name=task_name)
