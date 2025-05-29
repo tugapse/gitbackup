@@ -1,200 +1,255 @@
-# Git Automation Script
+# **Git Automation Script**
 
-This script provides a simple yet powerful way to automate common Git operations like pulling updates, running pre-commit commands, staging, committing, and pushing changes. It's designed to be highly configurable for different projects and offers precise control over log verbosity.
+This script provides a simple yet powerful way to automate common Git operations like pulling updates, running pre-commit commands, staging, committing, and pushing changes. It's designed to be highly configurable for different projects and offers precise control over its execution and logging.
 
----
+## **🚀 Getting Started**
 
-## 🚀 Getting Started
-
-### Prerequisites
+### **Prerequisites**
 
 Before you dive in, make sure you have:
 
-* **Python 3.x** installed on your system.
-* **Git** installed and configured (ensure the `git` command is accessible in your system's PATH).
-* A **local Git repository** ready for automation.
+* **Python 3.x** installed on your system.  
+* **Git** installed and configured (ensure the git command is accessible in your system's PATH).  
+* A **local Git repository** (or a path where one can be initialized) ready for automation.
 
-### Installation
+### **Installation**
 
-1.  **Clone this repository** (or simply copy the files) to your local machine:
-    ```bash
-    git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git) # Replace with your actual repo URL
-    cd your-repo-name
-    ```
-2.  **Verify your file structure**:
-    Your project should be organized like this:
-    ```
-    your_project/
-    ├── main.py
-    ├── config.json  # Or your custom config file name
-    └── core/
-        ├── __init__.py
-        ├── cli_parser.py
-        ├── command_logic.py
-        ├── git_logic.py
-        └── logger.py
-    ```
+1. **Clone this repository** (or simply copy the files) to your local machine:  
+   git clone https://github.com/your-username/your-repo-name.git \# Replace with your actual repo URL  
+   cd your-repo-name
 
----
+2. Verify your file structure:  
+   Your project should be organized like this:  
+   your\_project/  
+   ├── main.py  
+   ├── config.json  \# Example config, or custom names  
+   └── core/  
+       ├── \_\_init\_\_.py  
+       ├── cli\_parser.py  
+       ├── command\_logic.py  
+       ├── git\_logic.py  
+       ├── logger.py  
+       ├── config\_operations.py \# New: For config creation/management  
+       └── workflow\_logic.py    \# New: For the main workflow
 
-## 🛠️ Configuration
+3. **Set up a Python Virtual Environment** (highly recommended):  
+   python3 \-m venv venv  
+   \# On Windows: .\\venv\\Scripts\\activate.bat  
+   \# On Linux/macOS: source venv/bin/activate
 
-The script uses straightforward JSON files to define each automated task.
+4. **Install dependencies**:  
+   pip install pyinstaller \# PyInstaller is needed if you plan to build executables
 
-### Creating a New Configuration File
+## **🛠️ Configuration**
 
-You can generate a new configuration file with default settings right from your terminal:
+The script uses straightforward JSON files to define each automated task. By default, these configuration files are stored in a dedicated folder within your user's home directory: \~/git\_automation\_configs/.
 
-```bash
-python main.py --create "My First Git Task" -o my_task.json
-```
-    --create "TASK_NAME": This initiates the creation of a new config file, using TASK_NAME as its identifier.
-    -o my_task.json: (Optional) Specifies the output filename for your config. If you omit this, the file will be named task_name.json (e.g., my_first_git_task.json).
+### **Creating a New Configuration File (--create)**
 
-After creation, a file like my_task.json will appear. You'll need to edit it to fit your project:
-JSON
+You can generate a new configuration file with default settings right from your terminal.  
+\# Creates '\~/git\_automation\_configs/my\_first\_git\_task.json'  
+python main.py \--create "My First Git Task"
 
-// my_task.json
-{
-  "name": "My First Git Task",
-  "origin": "origin",
-  "branch": "main",
-  "git_repo_path": "/path/to/your/local_git_repo", // <-- IMPORTANT: Update this path!
-  "command_line": "echo 'Your command here (e.g., npm run build, python script.py)'", // <-- Update this command!
-  "git_commit_message": "Automated update for My First Git Task"
+\# Creates 'my\_custom\_task.json' in the current directory  
+python main.py \--create "My Custom Task" \-o my\_custom\_task.json
+
+* \--create "TASK\_NAME": This initiates the creation of a new config file, using TASK\_NAME as its identifier.  
+* \-o FILEPATH: (Optional) Specifies the output filename for your config. If you omit this, the file will be named task\_name.json (e.g., my\_first\_git\_task.json) and placed in the default \~/git\_automation\_configs/ directory.
+
+After creation, a file like my\_first\_git\_task.json will appear. You'll need to **edit it** to fit your project:  
+// my\_first\_git\_task.json  
+{  
+  "name": "My First Git Task",  
+  "origin": "origin",  
+  "branch": "main",  
+  "git\_repo\_path": "/path/to/your/local\_git\_repo", // \<-- IMPORTANT: Update this path\!  
+  "command\_line": "echo 'Your command here (e.g., npm run build, python script.py)'", // \<-- Update this command\!  
+  "git\_commit\_message": "Automated update for My First Git Task"  
 }
 
-Creating a Configuration File with All Arguments
+#### **Overwriting Existing Configs**
 
-You can also pre-populate fields like branch, origin, and git_repo_path when creating the file:
-Bash
+By default, the script will prevent overwriting an existing configuration file. To force an overwrite, use the \--overwrite flag:  
+\# This will overwrite 'my\_config.json' if it exists  
+python main.py \--create "My Config" \-o my\_config.json \--overwrite
 
-python main.py --create "Dev Branch Workflow" -o dev_workflow.json \
-  --branch develop --origin my-fork --folder "/home/user/my_dev_project" --verbose
+#### **Pre-populating Fields During Creation**
 
-This command creates dev_workflow.json with develop as the branch, my-fork as the origin, and "/home/user/my_dev_project" as the repository path. It also enables verbose output during the creation process itself.
-Editing Your Configuration
+You can also pre-populate fields like branch, origin, and git\_repo\_path when creating the file:  
+python main.py \--create "Dev Branch Workflow" \-o dev\_workflow.json \\  
+  \--branch develop \--origin my-fork \--folder "/home/user/my\_dev\_project" \--verbose
 
-Open your generated JSON file (e.g., my_task.json) and carefully modify these key fields:
+This command creates dev\_workflow.json with develop as the branch, my-fork as the origin, and "/home/user/my\_dev\_project" as the repository path. It also enables verbose output during the creation process itself.
 
-    name: A clear, descriptive name for your automation task.
-    origin: The name of your Git remote (e.g., origin, upstream). Defaults to origin.
-    branch: The specific Git branch you want the script to operate on (e.g., main, develop, feature/new-feature). Defaults to main.
-    git_repo_path: REQUIRED! The absolute path to your local Git repository. This is vital for the script to locate and manage your code.
-    command_line: The shell command to execute before the Git operations. This is perfect for running build processes, tests, data generation, or any other pre-commit actions. Leave it empty ("") if no command is needed.
-    git_commit_message: The default commit message to use for automated commits.
+### **Editing Your Configuration (--edit)**
 
-🚀 Usage
+To quickly open an existing configuration file in your system's default text editor:  
+\# Opens '\~/git\_automation\_configs/my\_daily\_backup.json'  
+python main.py my\_daily\_backup \--edit
 
-To run your automated task, simply specify the path to its configuration file:
-Bash
+\# Opens '/path/to/my\_custom\_config.json'  
+python main.py \--json /path/to/my\_custom\_config.json \--edit
 
-python main.py my_task.json
+### **Listing All Configured Tasks (--list)**
 
-Command-line Overrides
+To see a summary of all configuration files found in your default config directory (\~/git\_automation\_configs/):  
+python main.py \--list
+
+**Example Output:**  
+Listing all configured tasks in '/home/user/git\_automation\_configs':  
+\- My First Git Task \- main  
+  /path/to/your/local\_git\_repo  
+\- Dev Branch Workflow \- develop  
+  /home/user/my\_dev\_project
+
+### **Editing Your Configuration**
+
+Open your generated JSON file (e.g., my\_first\_git\_task.json) and carefully **modify these key fields**:
+
+* **name**: A clear, descriptive name for your automation task.  
+* **origin**: The name of your Git remote (e.g., origin, upstream). Defaults to origin.  
+* **branch**: The specific Git branch you want the script to operate on (e.g., main, develop, feature/new-feature). Defaults to main.  
+* **git\_repo\_path**: **REQUIRED\!** The **absolute path** to your local Git repository. This is vital for the script to locate and manage your code.  
+* **command\_line**: The shell command to execute *before* the Git operations. This is perfect for running build processes, tests, data generation, or any other pre-commit actions. Leave it empty ("") if no command is needed.  
+* **git\_commit\_message**: The default commit message to use for automated commits. A timestamp \[MMDDHHMMSS\] will be automatically appended to this message during the commit.
+
+## **🚀 Usage**
+
+To run your automated task, simply specify the task name (if in the default config directory) or the full path to its configuration file:  
+\# Run a task from the default config directory  
+python main.py my\_daily\_backup
+
+\# Run a task using an explicit JSON file path  
+python main.py \--json /path/to/my\_custom\_config.json
+
+### **Command-line Overrides**
 
 You can temporarily override configuration values for a single run directly from the command line without modifying your JSON file. This is great for flexible execution.
 
-    Override Branch:
-    Bash
+* **Override Branch**:  
+  python main.py my\_task.json \--branch feature/experimental
 
-python main.py my_task.json --branch feature/experimental
+* **Override Origin**:  
+  python main.py my\_task.json \--origin specific-remote
 
-Override Origin:
-Bash
+* **Override Repository Folder**:  
+  python main.py my\_task.json \--folder "/another/path/to/your/repo"
 
-python main.py my_task.json --origin specific-remote
+* **Combine Multiple Overrides**:  
+  python main.py my\_task.json \--branch hotfix/bug-fix \--origin fork-origin \--folder "/tmp/my\_cloned\_repo"
 
-Override Repository Folder:
-Bash
+### **Initializing a Git Repository (--initialize)**
 
-python main.py my_task.json --folder "/another/path/to/your/repo"
+If the git\_repo\_path specified in your config (or via \--folder) does not contain an initialized Git repository, you can tell the script to initialize it automatically:  
+\# This will initialize /tmp/my\_new\_repo if it doesn't exist,  
+\# add the specified origin, and then proceed with the workflow.  
+python main.py my\_new\_repo\_task \--folder /tmp/my\_new\_repo \--initialize \--branch dev \--origin https://github.com/user/new-repo.git
 
-Combine Multiple Overrides:
-Bash
+If \--initialize is used and the repository already exists, the script will simply proceed without re-initializing it.
 
-python main.py my_task.json --branch hotfix/bug-fix --origin fork-origin --folder "/tmp/my_cloned_repo"
+## **📝 Logging and Verbosity**
 
-Run with Overrides and Verbose Output:
-Bash
+The script provides clear, color-coded output to suit your needs:
 
-    python main.py my_task.json --branch production --folder "/var/www/my-app" --verbose
+* **Default Output**: By default, the script provides a concise overview, showing major process steps (in **cyan**), successful completions (in **green**), and critical errors (in **red**). Informational messages (like listing tasks) are also always visible.  
+  python main.py my\_task.json
 
-📝 Logging and Verbosity
+  **Example Output (Default):**  
+  Starting automated task from '/home/user/git\_automation\_configs/my\_task.json'
 
-The script offers two distinct levels of output to suit your needs:
+  Task Details: My First Git Task  
+    Git Repo Path: '/home/user/Code/my-repo' (from config)  
+    Branch: 'main' (from config/default)  
+    Origin: 'origin' (from config/default)  
+    Pre-commit Command: 'echo "hello"'  
+    Git Commit Message: 'Automated update for My First Git Task'
 
-    Default (Concise Output): By default, the script provides a clean overview, showing only the major "Step" messages and critical errors. This is ideal for routine operations where you only need to confirm success or identify high-level failures.
-    Bash
+  Performing initial Git Pull  
+  Initial Git Pull completed successfully.  
+  Executing command\_line  
+  Command execution completed successfully.  
+  Checking for changes in Git Repository  
+  Changes detected. Performing Git Add and Commit  
+  Git Add and Commit completed successfully.  
+  Commits made. Performing Git Push  
+  Git Push completed successfully.  
+  Performing final Git Pull (post-push sync)  
+  Final Git Pull completed successfully.  
+  Task 'My First Git Task' completed successfully\!
 
-python main.py my_task.json
+* **Verbose Mode (--verbose)**: For detailed diagnostics or to see every operation in action, use the \--verbose flag. This will display all internal logs, including Git command outputs (STDOUT/STDERR) and extensive progress messages.  
+  python main.py my\_task.json \--verbose
 
-Example Output (Default):
+  **Example Output (Verbose \- abbreviated):**  
+  Starting automated task from '/home/user/git\_automation\_configs/my\_task.json'
 
---- Starting automated task from 'my_task.json' ---
+  Task Details: My First Git Task  
+    Git Repo Path: '/home/user/Code/my-repo' (from config)  
+    Branch: 'main' (from config/default)  
+    Origin: 'origin' (from config/default)  
+    Pre-commit Command: 'echo "hello"'  
+    Git Commit Message: 'Automated update for My First Git Task'
 
---- Step 1: Performing initial Git Pull ---
+  \[My First Git Task\] INFO: Git repository found at '/home/user/Code/my-repo'.  
+  \[My First Git Task\] STEP: Checking out or creating branch 'main'...  
+  \[My First Git Task\] INFO: Fetching from remote 'origin' to update branch list...  
+  \[My First Git Task\] INFO: Executing Git command: git fetch origin in '/home/user/Code/my-repo'  
+  \[My First Git Task\] INFO: Git STDOUT:  
+  From github.com:user/repo  
+   \* \[new branch\]      dev        \-\> origin/dev  
+  \[My First Git Task\] INFO: Branch 'main' found on remote 'origin'.  
+  \[My First Git Task\] INFO: Branch 'main' found locally.  
+  \[My First Git Task\] INFO: Attempting to checkout existing branch 'main'...  
+  \[My First Git Task\] INFO: Executing Git command: git checkout main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] INFO: Git STDOUT:  
+  Already on 'main'  
+  Your branch is up to date with 'origin/main'.  
+  \[My First Git Task\] INFO: Successfully checked out branch 'main'.  
+  \[My First Git Task\] INFO: Executing Git command: git branch \--set-upstream-to origin/main main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] INFO: Git STDOUT:  
+  Branch 'main' set up to track remote branch 'main' from 'origin'.  
+  \[My First Git Task\] SUCCESS: Branch operation for 'main' completed.
 
---- Step 2: Executing command_line ---
+  Performing initial Git Pull  
+  \[My First Git Task\] INFO: Pulling updates for branch 'main'...  
+  \[My First Git Task\] INFO: Executing Git command: git pull origin main in '/home/user/Code/my-repo'  
+  \[My First Git Task\] INFO: Git STDOUT:  
+  Already up to date.  
+  \[My First Git Task\] INFO: Git Pull successful.  
+  Initial Git Pull completed successfully.  
+  ... (and so on for all steps, including Git STDOUT/STDERR details)
 
---- Step 3: Checking for changes in Git Repository ---
-
---- Step 4: Changes detected. Performing Git Add and Commit ---
-
---- Step 5: Commits made. Performing Git Push ---
-
---- Step 6: Performing final Git Pull (post-push sync) ---
-
---- Task 'My First Git Task' completed successfully! ---
-
-Verbose Mode: For detailed diagnostics, debugging, or simply to see every operation in action, use the --verbose flag. This will display all internal logs, including Git command outputs (STDOUT/STDERR) and extensive progress messages.
-Bash
-
-    python main.py my_task.json --verbose
-
-    Example Output (Verbose - abbreviated):
-
-    --- Starting automated task from 'my_task.json' ---
-
-    Task Details: My First Git Task
-      Git Repo Path: '/home/user/Code/my-repo' (from config)
-      Branch: 'main' (from config/default)
-      Origin: 'origin' (from config/default)
-      Pre-commit Command: 'echo "hello"'
-      Git Commit Message: 'Automated update for My First Git Task'
-    ------------------------------------------------------------
-
-    --- Step 1: Performing initial Git Pull ---
-      [My First Git Task] Pulling updates for branch 'main'...
-      [My First Git Task] Executing Git command: git pull origin main in '/home/user/Code/my-repo'
-      [My First Git Task] Git STDOUT:
-    Already up to date.
-      [My First Git Task] Git Pull successful.
-
-    --- Step 2: Executing command_line ---
-      [My First Git Task] Attempting to execute command: 'echo "hello"'
-      [My First Git Task] Command STDOUT:
-    hello
-      [My First Git Task] Command executed successfully.
-    ... (and so on for all steps, including Git STDOUT/STDERR details)
-
-⚙️ Workflow Explained
+## **⚙️ Workflow Explained**
 
 The script executes a well-defined, sequential workflow for each task:
 
-    Initial Git Pull: Starts by performing a git pull on your specified branch to ensure your local repository is completely up-to-date.
-    Execute Pre-commit Command: Runs the shell command defined in your command_line configuration. This is where you'd typically integrate build scripts, tests, or any other necessary pre-commit steps.
-    Check for Changes: Scans your Git repository for any modifications, new files, or deletions using git status --porcelain.
-    Git Add & Commit: If the script detects any changes in Step 3, it stages all modified and untracked files (git add .) and then creates a new commit using the git_commit_message from your configuration.
-    Git Push: If a new commit was successfully created in Step 4, the script pushes your local commits to the remote repository.
-    Final Git Pull: Performs one last git pull after the push. This ensures your local repository is fully synchronized with the remote, accounting for any potential concurrent changes or merge resolutions.
+1. **Repository Setup (if needed)**:  
+   * If \--initialize is used and the git\_repo\_path doesn't exist or isn't a Git repo, it will be initialized (git init) and the origin remote will be added.  
+   * The script will then ensure the specified \--branch is checked out, creating it locally if it doesn't exist and attempting to push it to the remote to set up tracking.  
+2. **Initial Git Pull**: Starts by performing a git pull on your specified branch to ensure your local repository is completely up-to-date.  
+3. **Execute Pre-commit Command**: Runs the shell command defined in your command\_line configuration. This is where you'd typically integrate build scripts, tests, data generation, or any other necessary pre-commit steps.  
+4. **Check for Changes**: Scans your Git repository for any modifications, new files, or deletions using git status \--porcelain.  
+5. **Git Add & Commit**: If the script detects any changes in Step 4, it stages all modified and untracked files (git add .) and then creates a new commit using the git\_commit\_message from your configuration. A timestamp \[MMDDHHMMSS\] will be automatically appended to the commit message.  
+6. **Git Push**: If a new commit was successfully created in Step 5, the script pushes your local commits to the remote repository.  
+7. **Final Git Pull**: Performs one last git pull after the push. This ensures your local repository is fully synchronized with the remote, accounting for any potential concurrent changes or merge resolutions.
 
-🐛 Troubleshooting
+## **📦 Building Standalone Executables**
 
-    AttributeError: 'Namespace' object has no attribute 'verbose': This error indicates that the --verbose argument hasn't been correctly defined in core/cli_parser.py. Please ensure that file matches the provided code exactly.
-    Error: 'git' command not found: This usually means Git isn't installed on your system, or its executable isn't added to your system's PATH.
-    Error: ... 'git_repo_path' is missing: Verify that the git_repo_path field is correctly set in your JSON configuration file, or that you've provided it via the --folder command-line argument.
-    Error: ... not a valid Git repository: The path you've provided for git_repo_path (or --folder) either doesn't exist or isn't a recognized Git repository.
-    Unexpected verbose output: If you're seeing too much detail without the --verbose flag, double-check these:
-    Ensure all log() calls in core/git_logic.py and core/command_logic.py use level='normal' for messages you want hidden by default.
-    Verify that set_verbose(args.verbose) is called correctly and early in your main.py script.
+You can package your Python script into a standalone executable for easier distribution using **PyInstaller**.
+
+1. **Ensure PyInstaller is installed** in your virtual environment: pip install pyinstaller.  
+2. **Use the provided build scripts**:  
+   * **For Linux/macOS**: Run ./build.sh  
+   * **For Windows**: Run build.cmd
+
+These scripts will activate your virtual environment, clean previous builds, and then run PyInstaller to create a single executable file (e.g., dist/GitAutomator on Linux/macOS, dist/GitAutomator.exe on Windows).  
+**Important Note on Cross-Compilation**: PyInstaller is not a cross-compiler. To create a Windows executable (.exe), you must run the build process on a Windows machine. Similarly, to create a Linux executable, build it on a Linux machine. Using virtual machines is a common way to achieve builds for different operating systems from a single host.
+
+## **🐛 Troubleshooting**
+
+* **AttributeError: 'Namespace' object has no attribute 'verbose'**: This error indicates that the \--verbose argument hasn't been correctly defined in core/cli\_parser.py. Please ensure that file matches the provided code exactly.  
+* **Error: 'git' command not found**: This usually means Git isn't installed on your system, or its executable isn't added to your system's PATH.  
+* **Error: ... 'git\_repo\_path' is missing**: Verify that the git\_repo\_path field is correctly set in your JSON configuration file, or that you've provided it via the \--folder command-line argument.  
+* **Error: ... not a valid Git repository**: The path you've provided for git\_repo\_path (or \--folder) either doesn't exist or isn't a recognized Git repository. Use \--initialize if you want the script to set it up for you.  
+* **Error: Configuration file '...' already exists. Use \--overwrite to force creation.**: This occurs when you try to create a config file with a name that already exists without using the \--overwrite flag.  
+* **Error: Default editor command not found.**: When using \--edit, your system needs to have a default program associated with opening .json files, and that program's command needs to be in your system's PATH. For Linux, ensure xdg-open is available.

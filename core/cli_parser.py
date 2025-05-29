@@ -10,14 +10,14 @@ def parse_arguments():
         description="Automate Git-centric workflows or create new config files."
     )
 
-    # --- Mutually exclusive group for core actions: run task OR create config ---
-    # --edit is *not* in this group because it modifies the behavior of task_identifier/--json
+    # --- Mutually exclusive group for core actions: run task, create config, or list configs ---
+    # --edit is not in this group because it modifies the behavior of task_identifier/--json
     group = parser.add_mutually_exclusive_group()
 
     # Positional argument: can be a task name or a direct config file path (for running OR editing)
     group.add_argument(
         "task_identifier",
-        nargs='?', # Makes it optional, as --create or --json can be used instead
+        nargs='?', # Makes it optional, as --create, --json, or --list can be used instead
         help="The name of the task (e.g., 'my_backup') which resolves to 'config_dir/my_backup.json', OR a direct path to a config file (e.g., 'path/to/my_config.json')."
     )
     
@@ -28,7 +28,14 @@ def parse_arguments():
         help="Create a new JSON configuration file with the given task name."
     )
 
-    # --- General options (can be combined with task_identifier or --json, but not --create) ---
+    # NEW: --list flag (added to the mutually exclusive group)
+    group.add_argument(
+        "--list",
+        action="store_true",
+        help="List all configured tasks found in the config directory, showing their name, branch, and local repository location."
+    )
+
+    # --- General options (can be combined with task_identifier or --json, but not --create or --list directly) ---
 
     # --json flag: explicitly load from a file path (highest precedence for task/edit)
     parser.add_argument(
@@ -37,14 +44,12 @@ def parse_arguments():
         help="Explicitly specify the full path to the JSON configuration file to load/edit. This overrides the positional 'task_identifier' if it was a task name."
     )
 
-    # NEW: --edit flag (moved out of the mutually exclusive group)
-    # It applies to the file identified by task_identifier or --json
+    # --edit flag
     parser.add_argument(
         "--edit",
         action="store_true",
         help="Open the identified JSON configuration file in the default text editor. Requires a 'task_identifier' or '--json' path."
     )
-
 
     # --config-dir: base directory for task name lookups
     default_config_dir = os.path.join(os.path.expanduser('~'), 'git_automation_configs')

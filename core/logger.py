@@ -5,7 +5,7 @@ _verbose = False
 # ANSI escape codes for colors
 COLOR_RED = "\033[31m"
 COLOR_CYAN = "\033[36m"
-COLOR_GREEN = "\033[32m" # NEW: Green color
+COLOR_GREEN = "\033[32m"
 COLOR_RESET = "\033[0m"
 
 def set_verbose(verbose_flag):
@@ -19,6 +19,13 @@ def log(message, level='normal', task_name=None):
     """
     Logs a message with a specific level and optional task name,
     applying color based on the log level.
+
+    Levels:
+    - 'error': Critical issues, always displayed, red.
+    - 'step': Major steps in the workflow, always displayed, cyan.
+    - 'success': Successful operations, always displayed, green.
+    - 'info': Important information that should always be displayed, no special color.
+    - 'normal': Debugging or detailed information, only displayed if verbose is true, no special color.
     """
     prefix = ""
     color = ""
@@ -29,21 +36,23 @@ def log(message, level='normal', task_name=None):
 
     if level == 'error':
         color = COLOR_RED
-        log_message = f"{prefix}ERROR: {message}"
+        log_message = f"{prefix}{message}" 
     elif level == 'step':
         color = COLOR_CYAN
         log_message = f"{prefix}{message}"
-    elif level == 'success': # NEW: Handle 'success' level with green color
+    elif level == 'success':
         color = COLOR_GREEN
         log_message = f"{prefix}{message}"
+    elif level == 'info':
+        log_message = f"{prefix}{message}" 
     elif level == 'normal':
         if not _verbose:
             return
-        log_message = f"{prefix}INFO: {message}"
-    else: # Fallback for any unknown level or non-verbose normal messages
-        if not _verbose and level not in ['error', 'step', 'success']: # Only print if verbose or it's an always-visible level
+        log_message = f"{prefix}{message}" 
+    else: # Fallback for any unknown level
+        if not _verbose:
             return
-        log_message = f"{prefix}INFO: {message}"
+        log_message = f"{prefix}{message}" 
 
     # Print the message with color, followed by reset to not affect subsequent output
     print(f"{color}{log_message}{COLOR_RESET}")
