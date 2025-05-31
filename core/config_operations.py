@@ -1,7 +1,10 @@
+# core/config_operations.py
+
 import os
 import json
 import sys
 from core.logger import log
+from core.messages import MESSAGES
 
 def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, folder_arg=None, overwrite_flag=False):
     """
@@ -9,8 +12,8 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
     branch/origin/folder from CLI arguments.
     Ensures the directory path exists and handles overwrite logic.
     """
-    log(f"Starting configuration file creation for task: '{name}'", level='step')
-    log(f"Target output path: '{output_filepath}'", level='normal')
+    log(MESSAGES["config_start_creation"].format(name), level='step')
+    log(MESSAGES["config_target_output_path"].format(output_filepath), level='normal')
 
     default_config = {
         "name": name,
@@ -21,41 +24,39 @@ def create_config_file(name, output_filepath, branch_arg=None, origin_arg=None, 
         "git_commit_message": f"Automated update for {name}"
     }
 
-    # Ensure .json extension if not already present
     if not output_filepath.lower().endswith(".json"):
         output_filepath += ".json"
-        log(f"Appended '.json' extension to output path: '{output_filepath}'", level='normal')
+        log(MESSAGES["config_appended_json_extension"].format(output_filepath), level='normal')
 
-    # Check for file existence and handle overwrite
     if os.path.exists(output_filepath):
         if not overwrite_flag:
-            log(f"Error: Configuration file '{output_filepath}' already exists. Use --overwrite to force creation.", level='error')
+            log(MESSAGES["config_file_exists_error"].format(output_filepath), level='error')
             sys.exit(1)
         else:
-            log(f"Warning: Configuration file '{output_filepath}' already exists. Overwriting as --overwrite was specified.", level='normal')
+            log(MESSAGES["config_file_exists_warning_overwrite"].format(output_filepath), level='normal')
 
     output_dir = os.path.dirname(output_filepath)
     if output_dir and not os.path.exists(output_dir):
-        log(f"Parent directory '{output_dir}' does not exist. Attempting to create...", level='normal')
+        log(MESSAGES["config_parent_dir_not_exist"].format(output_dir), level='normal')
         try:
             os.makedirs(output_dir, exist_ok=True)
-            log(f"Successfully created directory: '{output_dir}'", level='normal')
+            log(MESSAGES["config_dir_created_success"].format(output_dir), level='normal')
         except Exception as e:
-            log(f"Error creating directory '{output_dir}': {e}", level='error')
+            log(MESSAGES["config_error_creating_dir"].format(output_dir, e), level='error')
             sys.exit(1)
     elif not output_dir:
         output_dir = os.getcwd()
-        log(f"Output file will be created in the current working directory: '{output_dir}'", level='normal')
+        log(MESSAGES["config_output_to_cwd"].format(output_dir), level='normal')
     else:
-        log(f"Parent directory '{output_dir}' already exists.", level='normal')
+        log(MESSAGES["config_parent_dir_exists"].format(output_dir), level='normal')
 
     try:
         with open(output_filepath, 'w') as f:
             json.dump(default_config, f, indent=2)
-        log(f"Successfully created configuration file: '{output_filepath}'", level='success')
-        log("\nPlease edit this file with your specific paths and commands.", level='normal')
+        log(MESSAGES["config_creation_success"].format(output_filepath), level='success')
+        log(MESSAGES["config_edit_hint"], level='normal')
     except Exception as e:
-        log(f"Error creating configuration file '{output_filepath}': {e}", level='error')
+        log(MESSAGES["config_creation_failed"].format(output_filepath, e), level='error')
         sys.exit(1)
 
-    log(f"Finished configuration file creation for task: '{name}'", level='step')
+    log(MESSAGES["config_finished_creation"].format(name), level='step')

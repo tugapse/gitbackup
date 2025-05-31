@@ -1,10 +1,11 @@
 # core/command_logic.py
 
 import subprocess
-import os # Import os for path handling if needed, though subprocess.run handles cwd directly
+import os
 from core.logger import log
+from core.messages import MESSAGES
 
-def execute_command(command, task_name=None, cwd=None): # Added cwd=None to the signature
+def execute_command(command, task_name=None, cwd=None):
     """
     Executes a given shell command.
 
@@ -16,42 +17,41 @@ def execute_command(command, task_name=None, cwd=None): # Added cwd=None to the 
     Returns:
         bool: True if the command executed successfully, False otherwise.
     """
-    try:
-        log(f"Executing command: {command}", level='normal', task_name=task_name)
-        
-        # Ensure cwd is a valid path if provided
-        if cwd and not os.path.isdir(cwd):
-            log(f"Warning: Specified command working directory '{cwd}' does not exist.", level='warning', task_name=task_name)
-            # Decide if you want to proceed without setting cwd or exit.
-            # For now, we'll let subprocess.run handle it, which might error if it's critical.
-            # Or you could set cwd=None here to use default, or raise an error.
-            # For robustness, it's better to explicitly check and potentially exit or default.
-            # Let's add a robust check here:
-            log(f"Error: Command working directory '{cwd}' does not exist.", level='error', task_name=task_name)
-            return False
-
-        result = subprocess.run(
-            command,
-            shell=True,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            cwd=cwd # Pass the cwd argument here
-        )
-        if result.stdout:
-            log(f"Command STDOUT:\n{result.stdout}", level='normal', task_name=task_name)
+    if not command:
+        log(MESSAGES["command_no_command_specified"], level='normal', task_name=task_name)
         return True
-    except subprocess.CalledProcessError as e:
-        log(f"Command FAILED with exit code {e.returncode}.", level='error', task_name=task_name)
-        if e.stdout:
-            log(f"Command STDOUT:\n{e.stdout}", level='error', task_name=task_name)
-        if e.stderr:
-            log(f"Command STDERR:\n{e.stderr}", level='error', task_name=task_name)
+
+    log(MESSAGES["command_executing"].format(command), level='normal', task_name=task_name)
+    
+    if cwd and not os.path.isdir(cwd):
+        log(MESSAGES["command_error_cwd_not_exist"].format(cwd), level='error', task_name=task_name)
         return False
+
+    try:
+        process = subprocess.run(
+            command,
+            cwd=cwd,
+            shell=True,
+            capture_output=True,
+            text=True,
+            check=False
+        )
+
+        if process.stdout:
+            log(MESSAGES["command_stdout"].format(process.stdout.strip()), level='normal', task_name=task_name)
+        if process.stderr:
+            log(MESSAGES["command_stderr"].format(process.stderr.strip()), level='normal', task_name=task_name)
+
+        if process.returncode != 0:
+            log(MESSAGES["command_failed_exit_code"].format(process.returncode), level='error', task_name=task_name)
+            return False
+        
+        log(MESSAGES["command_execution_successful"], level='normal', task_name=task_name)
+        return True
+
     except FileNotFoundError:
-        log(f"Error: Command '{command.split()[0]}' not found.", level='error', task_name=task_name)
+        log(MESSAGES["command_error_not_found"].format(command.split(' ')[0]), level='error', task_name=task_name)
         return False
     except Exception as e:
-        log(f"An unexpected error occurred during command execution: {e}", level='error', task_name=task_name)
+        log(MESSAGES["command_unexpected_error"].format(e), level='error', task_name=task_name)
         return False

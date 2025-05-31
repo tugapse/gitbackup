@@ -1,5 +1,25 @@
 import argparse
 import os
+import sys
+from core.messages import MESSAGES
+
+def get_default_config_dir():
+    env_config_dir = os.environ.get('GIT_AUTOMATION_CONFIG_DIR')
+    if env_config_dir:
+        return env_config_dir
+
+    if sys.platform == "win32":
+        appdata = os.environ.get('APPDATA')
+        if appdata:
+            return os.path.join(appdata, 'git_automation_configs')
+        else:
+            return os.path.join(os.path.expanduser('~'), 'git_automation_configs')
+    else:
+        xdg_config_home = os.environ.get('XDG_CONFIG_HOME')
+        if xdg_config_home:
+            return os.path.join(xdg_config_home, 'git_automation_configs')
+        else:
+            return os.path.join(os.path.expanduser('~'), '.config', 'git_automation_configs')
 
 def parse_arguments():
     """
@@ -7,32 +27,31 @@ def parse_arguments():
     Returns the parsed arguments object.
     """
     parser = argparse.ArgumentParser(
-        description="Automate Git-centric workflows or create new config files."
+        description=MESSAGES["cli_description"]
     )
 
     # --- Mutually exclusive group for core actions: run task, create config, or list configs ---
-    # --edit is not in this group because it modifies the behavior of task_identifier/--json
     group = parser.add_mutually_exclusive_group()
 
     # Positional argument: can be a task name or a direct config file path (for running OR editing)
     group.add_argument(
         "task_identifier",
         nargs='?', # Makes it optional, as --create, --json, or --list can be used instead
-        help="The name of the task (e.g., 'my_backup') which resolves to 'config_dir/my_backup.json', OR a direct path to a config file (e.g., 'path/to/my_config.json')."
+        help=MESSAGES["cli_task_identifier_help"]
     )
     
     # --create flag: for creating a new config file (exclusive with task_identifier)
     group.add_argument(
         "--create",
         metavar="TASK_NAME",
-        help="Create a new JSON configuration file with the given task name."
+        help=MESSAGES["cli_create_help"]
     )
 
-    # NEW: --list flag (added to the mutually exclusive group)
+    # --list flag (added to the mutually exclusive group)
     group.add_argument(
         "--list",
         action="store_true",
-        help="List all configured tasks found in the config directory, showing their name, branch, and local repository location."
+        help=MESSAGES["cli_list_help"]
     )
 
     # --- General options (can be combined with task_identifier or --json, but not --create or --list directly) ---
@@ -41,66 +60,67 @@ def parse_arguments():
     parser.add_argument(
         "--json",
         metavar="FILEPATH",
-        help="Explicitly specify the full path to the JSON configuration file to load/edit. This overrides the positional 'task_identifier' if it was a task name."
+        help=MESSAGES["cli_json_help"]
     )
 
-    # --edit flag
+    # --edit flag (moved out of the mutually exclusive group)
     parser.add_argument(
         "--edit",
         action="store_true",
-        help="Open the identified JSON configuration file in the default text editor. Requires a 'task_identifier' or '--json' path."
+        help=MESSAGES["cli_edit_help"]
     )
 
     # --config-dir: base directory for task name lookups
-    default_config_dir = os.path.join(os.path.expanduser('~'), 'git_automation_configs')
+    default_config_dir = get_default_config_dir()
+    # UPDATED: help message to include environment variable
     parser.add_argument(
         "--config-dir",
         metavar="PATH",
         default=default_config_dir,
-        help=f"Base directory for looking up config files when only a task name is provided (e.g., 'my_task' resolves to 'PATH/my_task.json'). Defaults to '{default_config_dir}'."
+        help=MESSAGES["cli_config_dir_help_env"].format(default_config_dir) # Using a new message key
     )
 
     # -o / --output for creation output file
     parser.add_argument(
         "-o", "--output",
         metavar="FILEPATH",
-        help="Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the default config directory."
+        help=MESSAGES["cli_output_help"]
     )
     
     # Git override arguments (branch, origin, folder)
     parser.add_argument(
         "--branch",
-        help="Overrides the 'branch' specified in the config file for this run or pre-fills it during creation."
+        help=MESSAGES["cli_branch_override_help"]
     )
     parser.add_argument(
         "--origin",
-        help="Overrides the 'origin' specified in the config file for this run or pre-fills it during creation."
+        help=MESSAGES["cli_origin_override_help"]
     )
     parser.add_argument(
         "--folder",
         metavar="GIT_REPO_PATH",
-        help="Overrides the 'git_repo_path' specified in the config file for this run or pre-fills it during creation. This should be the absolute path to your local Git repository."
+        help=MESSAGES["cli_folder_help"]
     )
     
     # Verbose flag
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Enable verbose output for detailed logging of operations."
+        help=MESSAGES["cli_verbose_help"]
     )
 
     # Overwrite flag for creation
     parser.add_argument(
         "--overwrite",
         action="store_true",
-        help="When creating a configuration file, overwrite it if it already exists."
+        help=MESSAGES["cli_overwrite_help"]
     )
 
     # --initialize flag
     parser.add_argument(
         "--initialize",
         action="store_true",
-        help="Initialize the Git repository if it does not exist at the specified 'git_repo_path'."
+        help=MESSAGES["cli_initialize_help"]
     )
 
     return parser.parse_args()

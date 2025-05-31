@@ -8,8 +8,9 @@ from core.cli_parser import parse_arguments
 
 # Import functions for specific actions
 from core.logger import set_verbose, log
-from core.workflow_logic import run_task_workflow # Now from core/workflow_logic.py
-from core.config_operations import create_config_file # NEW: Imported from core/config_operations.py
+from core.messages import MESSAGES
+from core.workflow_logic import run_task_workflow
+from core.config_operations import create_config_file
 
 
 if __name__ == "__main__":
@@ -24,9 +25,9 @@ if __name__ == "__main__":
     if not os.path.exists(effective_config_base_dir):
         try:
             os.makedirs(effective_config_base_dir, exist_ok=True)
-            log(f"Created default config directory: '{effective_config_base_dir}'", level='normal')
+            log(MESSAGES["config_default_config_path_created"].format(effective_config_base_dir), level='normal')
         except Exception as e:
-            log(f"Error creating default config directory '{effective_config_base_dir}': {e}", level='error')
+            log(MESSAGES["config_error_creating_default_config_path"].format(effective_config_base_dir, e), level='error')
             sys.exit(1)
 
     # --- Determine the configuration file path for running/editing a task ---
@@ -49,7 +50,6 @@ if __name__ == "__main__":
             base_filename = f"{task_name_for_creation.replace(' ', '_').lower()}"
             output_filepath = os.path.join(effective_config_base_dir, f"{base_filename}.json")
 
-        # Call the imported create_config_file function
         create_config_file(
             task_name_for_creation,
             output_filepath,
@@ -63,15 +63,15 @@ if __name__ == "__main__":
     # --- Handle --edit command ---
     if args.edit:
         if not config_file_path:
-            log("Error: No task identifier or --json path provided for editing.", level='error')
-            log("Usage: python main.py my_task --edit OR python main.py --json /path/to/my_config.json --edit", level='normal')
+            log(MESSAGES["cli_error_edit_no_args"], level='error')
+            log(MESSAGES["cli_edit_usage_hint"], level='normal')
             sys.exit(1)
 
         if not os.path.exists(config_file_path):
-            log(f"Error: Configuration file '{config_file_path}' not found for editing.", level='error')
+            log(MESSAGES["cli_error_config_file_not_found"].format(config_file_path), level='error')
             sys.exit(1)
 
-        log(f"Attempting to open '{config_file_path}' in default editor...", level='step')
+        log(MESSAGES["cli_attempting_open_editor"].format(config_file_path), level='step')
         try:
             if sys.platform == "win32":
                 os.startfile(config_file_path)
@@ -79,26 +79,25 @@ if __name__ == "__main__":
                 subprocess.run(["open", config_file_path], check=True)
             else:
                 subprocess.run(["xdg-open", config_file_path], check=True)
-            log(f"Successfully launched editor for '{config_file_path}'.", level='success')
+            log(MESSAGES["cli_editor_launched_success"].format(config_file_path), level='success')
         except FileNotFoundError as e:
-            log(f"Error: Default editor command not found. Ensure '{e.filename}' is in your PATH.", level='error')
+            log(MESSAGES["cli_error_editor_not_found"].format(e.filename), level='error')
             sys.exit(1)
         except subprocess.CalledProcessError as e:
-            log(f"Error opening file with default editor: {e}", level='error')
+            log(MESSAGES["cli_error_opening_file_editor"].format(e), level='error')
             sys.exit(1)
         except Exception as e:
-            log(f"An unexpected error occurred while trying to open the file: {e}", level='error')
+            log(MESSAGES["cli_error_unexpected_opening_file"].format(e), level='error')
             sys.exit(1)
         
         sys.exit(0)
 
     # --- Handle --list command ---
     if args.list:
-        log(f"Listing all configured tasks in '{effective_config_base_dir}':", level='step')
+        log(MESSAGES["cli_listing_tasks_in"].format(effective_config_base_dir), level='step')
         tasks_found = False
-        # Redundant os.path.exists check removed here, handled at startup
-        if not os.listdir(effective_config_base_dir): # Check if directory is empty
-            log(f"No configuration files found in '{effective_config_base_dir}'.", level='info')
+        if not os.listdir(effective_config_base_dir):
+            log(MESSAGES["cli_no_config_files_found"].format(effective_config_base_dir), level='info')
         else:
             for filename in os.listdir(effective_config_base_dir):
                 if filename.endswith(".json"):
@@ -116,59 +115,50 @@ if __name__ == "__main__":
                         tasks_found = True
 
                     except json.JSONDecodeError:
-                        log(f"  Warning: Skipping malformed JSON file: {filename}", level='warning')
+                        log(MESSAGES["cli_warning_malformed_json"].format(filename), level='warning')
                     except KeyError as e:
-                        log(f"  Warning: Skipping '{filename}'. Missing expected key: {e}", level='warning')
+                        log(MESSAGES["cli_warning_missing_key"].format(filename, e), level='warning')
                     except Exception as e:
-                        log(f"  Warning: An unexpected error occurred reading '{filename}': {e}", level='warning')
+                        log(MESSAGES["cli_warning_unexpected_error_reading_file"].format(filename, e), level='warning')
             
             if not tasks_found:
-                log(f"No valid configuration files found in '{effective_config_base_dir}'.", level='info')
+                log(MESSAGES["cli_no_valid_configs_found"].format(effective_config_base_dir), level='info')
 
         sys.exit(0)
 
     # --- If none of the above specific actions (create, edit, list) were requested, then proceed to run a task ---
     if not config_file_path:
-        log("Error: No task identifier or --json path provided to run a task.", level='error')
-        log("Usage Examples:", level='normal')
-        log("  Run by task name (e.g., 'my_daily_backup' in default config dir):", level='normal')
-        log("    python main.py my_daily_backup", level='normal')
-        log("  Run by task name in a specific config directory:", level='normal')
-        log("    python main.py my_daily_backup --config-dir ./custom_configs/", level='normal')
-        log("  Run by explicit JSON file path:", level='normal')
-        log("    python main.py --json /path/to/my_config.json", level='normal')
-        log("  Run by explicit JSON file path (positional):", level='normal')
-        log("    python main.py ./local_task.json", level='normal')
-        log("  Create a new config (defaults to user home config dir):", level='normal')
-        log("    python main.py --create \"New Workflow\"", level='normal')
-        log("  Create a new config and overwrite if exists:", level='normal')
-        log("    python main.py --create \"MyExistingConfig\" --overwrite", level='normal')
-        log("  Initialize a new Git repo and run a task:", level='normal')
-        log("    python main.py my_new_repo_task --folder /tmp/my_new_repo --initialize --branch dev --origin https://github.com/user/new-repo.git", level='normal')
-        log("  Edit an existing config file:", level='normal')
-        log("    python main.py my_daily_backup --edit", level='normal')
-        log("  List all configured tasks:", level='normal')
-        log("    python main.py --list", level='normal')
+        log(MESSAGES["cli_error_no_task_or_json"], level='error')
+        log(MESSAGES["cli_usage_examples"], level='normal')
+        log(f"  {MESSAGES['cli_example_run_by_name']}\n    python main.py my_daily_backup", level='normal')
+        log(f"  {MESSAGES['cli_example_run_by_name_config_dir']}\n    python main.py my_daily_backup --config-dir ./custom_configs/", level='normal')
+        log(f"  {MESSAGES['cli_example_run_by_json_path']}\n    python main.py --json /path/to/my_config.json", level='normal')
+        log(f"  {MESSAGES['cli_example_run_by_json_path_positional']}\n    python main.py ./local_task.json", level='normal')
+        log(f"  {MESSAGES['cli_example_create_new_config']}\n    python main.py --create \"New Workflow\"", level='normal')
+        log(f"  {MESSAGES['cli_example_create_overwrite']}\n    python main.py --create \"MyExistingConfig\" --overwrite", level='normal')
+        log(f"  {MESSAGES['cli_example_initialize_run']}\n    python main.py my_new_repo_task --folder /tmp/my_new_repo --initialize --branch dev --origin https://github.com/user/new-repo.git", level='normal')
+        log(f"  {MESSAGES['cli_example_edit_config']}\n    python main.py my_daily_backup --edit", level='normal')
+        log(f"  {MESSAGES['cli_example_list_tasks']}\n    python main.py --list", level='normal')
         sys.exit(1)
 
     # If we reach here, it means a task needs to be run.
     # Load the task configuration and run the workflow.
     if not os.path.exists(config_file_path):
-        log(f"Error: Configuration file '{config_file_path}' not found.", level='error')
+        log(MESSAGES["cli_error_config_file_not_found"].format(config_file_path), level='error')
         sys.exit(1)
 
     try:
         with open(config_file_path, 'r') as f:
             task = json.load(f)
     except json.JSONDecodeError as e:
-        log(f"Error: Invalid JSON format in '{config_file_path}': {e}", level='error')
+        log(MESSAGES["cli_error_invalid_json_format"].format(config_file_path, e), level='error')
         sys.exit(1)
     except Exception as e:
-        log(f"An unexpected error occurred while reading '{config_file_path}': {e}", level='error')
+        log(MESSAGES["cli_error_unexpected_reading_config"].format(config_file_path, e), level='error')
         sys.exit(1)
 
     if not isinstance(task, dict):
-        log(f"Error: JSON file '{config_file_path}' must contain a single JSON object (not a list or other type).", level='error')
+        log(MESSAGES["cli_error_json_not_object"].format(config_file_path), level='error')
         sys.exit(1)
 
     # Call the extracted workflow function
