@@ -46,6 +46,21 @@ Before you dive in, make sure you have:
    pip install pyinstaller # PyInstaller is needed if you plan to build executables
    ```
 
+## ⚙️ Workflow Explained
+
+The script executes a well-defined, sequential workflow for each task:
+
+1.  **Repository Setup (if needed)**:
+
+    *   If `--initialize` is used and the `git_repo_path` doesn't exist or isn't a Git repo, it will be initialized (git init) and the origin remote will be added.
+    *   The script will then ensure the specified `--branch` is checked out, creating it locally if it doesn't exist and attempting to push it to the remote to set up tracking.
+2.  **Initial Git Pull**: Starts by performing a git pull on your specified branch to ensure your local repository is completely up-to-date.
+3.  **Execute Pre-commit Command**: Runs the shell command defined in your `command_line` configuration. This is where you'd typically integrate build scripts, tests, data generation, or any other necessary pre-commit steps.
+4.  **Check for Changes**: Scans your Git repository for any modifications, new files, or deletions using `git status --porcelain`.
+5.  **Git Add & Commit**: If the script detects any changes in Step 4, it stages all modified and untracked files (`git add .`) and then creates a new commit using the `git_commit_message` from your configuration. A timestamp `[MMDDHHMMSS]` will be automatically appended to the commit message.
+6.  **Git Push**: If a new commit was successfully created in Step 5, the script pushes your local commits to the remote repository.
+7.  **Final Git Pull**: Performs one last git pull after the push. This ensures your local repository is fully synchronized with the remote, accounting for any potential concurrent changes or merge resolutions.
+
 ## **🛠️ Configuration**
 
 The script uses straightforward JSON files to define each automated task. By default, these configuration files are stored in a dedicated folder within your user's home directory: `~/git_automation_configs/`.
