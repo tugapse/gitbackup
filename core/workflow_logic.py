@@ -64,10 +64,10 @@ def run_task_workflow(args, task, config_file_path):
     else:
         log(MESSAGES["workflow_repo_found"].format(git_repo_path), level='normal', task_name=task_name)
 
-    # --- Checkout or Create Branch ---
-    if not checkout_or_create_branch(git_repo_path, branch, origin, task_name):
-        log(MESSAGES["workflow_checkout_branch_failed"].format(task_name, branch), level='error')
-        sys.exit(1)
+    # # --- Checkout or Create Branch ---
+    # if not checkout_or_create_branch(git_repo_path, branch, origin, task_name):
+    #     log(MESSAGES["workflow_checkout_branch_failed"].format(task_name, branch), level='error')
+    #     sys.exit(1)
 
 
     # --- Initial Git Pull ---

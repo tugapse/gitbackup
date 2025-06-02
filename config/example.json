@@ -2,6 +2,6 @@
   "name": "My Daily Project Backup and Build",
   "origin": "Local Machine",
   "branch": "master",
-  "destination": "D:/Backups/DailyProjectBackup",
+  "git_repo_path": "D:/Backups/DailyProjectBackup",
   "command_line": "python D:/Backups/DailyProjectBackup/build_project.py --env=prod"
 }
