@@ -1,3 +1,7 @@
 .venv/
 .venv/*
 .env
+dist/*
+build/*
+GitAutomator.spec
+*.code-workspace
