@@ -78,10 +78,10 @@ Here's the expected structure of a task JSON file:
     "folder": "/path/to/your/repository",   // (Required) Absolute path to the Git repository.  
     "branch": "main",                       // (Required) The Git branch to operate on (e.g., "main", "develop").  
     "origin": "https://github.com/user/repo.git", // (Optional) The remote origin URL.  
-    "pull_before_command": true,            // (Optional, default: true) Whether to run \`git pull\` before \`pre\_command\`.  
+    "pull_before_command": true,            // (Optional, default: true) Whether to run `git pull` before `pre_command`.  
     "pre_command": "echo 'Running before Git ops'", // (Optional) Shell command to execute before Git add/commit/push.  
     "commit_message": "Automated commit by git-automation", // (Required) The commit message to use.  
-    "push_after_command": true,             // (Optional, default: true) Whether to run \`git push\` after \`post\_command\`.  
+    "push_after_command": true,             // (Optional, default: true) Whether to run `git push` after `post_command`.  
     "post_command": "echo 'Running after Git ops'" // (Optional) Shell command to execute after Git add/commit/push.  
 }
 ```
