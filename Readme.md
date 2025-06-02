@@ -26,10 +26,13 @@ This is a command-line interface (CLI) tool designed to automate common Git task
    * **Python 3.x**: Ensure you have Python 3 installed on your system.  
    * **Git**: Ensure Git is installed and accessible in your system's PATH.  
 2. **Clone the Repository**:  
-   git clone https://github.com/tugapse/gitbackup.git 
-   cd gitbackup
-
-3. **No further installation steps are typically required** as this is a standalone Python script.
+```script   
+git clone https://github.com/tugapse/gitbackup.git
+```
+```script  
+cd gitbackup
+```
+4. **No further installation steps are typically required** as this is a standalone Python script.
 
 ## **Usage**
 
