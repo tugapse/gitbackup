@@ -26,8 +26,8 @@ This is a command-line interface (CLI) tool designed to automate common Git task
    * **Python 3.x**: Ensure you have Python 3 installed on your system.  
    * **Git**: Ensure Git is installed and accessible in your system's PATH.  
 2. **Clone the Repository**:  
-   git clone https://github.com/your-username/backup-git.git \# Replace with your actual repo URL  
-   cd backup-git
+   git clone https://github.com/tugapse/gitbackup.git 
+   cd gitbackup
 
 3. **No further installation steps are typically required** as this is a standalone Python script.
 
@@ -72,6 +72,7 @@ The script is run via sh run.sh followed by commands and options.
 
 Task configurations are stored as JSON files (e.g., my\_task.json) in your configuration directory (default: \~/.config/git\_automation\_configs/ on Linux/macOS, %APPDATA%/git\_automation\_configs/ on Windows).  
 Here's the expected structure of a task JSON file:  
+```json
 {  
     "name": "my\_task\_name",                 // (Required) A descriptive name for the task.  
     "folder": "/path/to/your/repository",   // (Required) Absolute path to the Git repository.  
@@ -83,7 +84,7 @@ Here's the expected structure of a task JSON file:
     "push\_after\_command": true,             // (Optional, default: true) Whether to run \`git push\` after \`post\_command\`.  
     "post\_command": "echo 'Running after Git ops'" // (Optional) Shell command to execute after Git add/commit/push.  
 }
-
+```
 **Note on pre\_command and post\_command**:
 
 * These fields expect a single string that will be executed as a shell command.  
@@ -93,11 +94,3 @@ Here's the expected structure of a task JSON file:
 
 * **Console Output**: Provides clean, color-coded messages (Success, Step, Info, Warning, Error) without verbose prefixes, allowing for quick visual scanning of the workflow progress and status.  
 * **Log File**: A detailed log file (git\_automation.log in your config directory's logs subfolder) captures all messages, including debug output, with timestamps and full context, regardless of the console verbosity setting. This is useful for debugging and auditing past runs.
-
-## **Error Handling**
-
-The script is designed to:
-
-* Catch KeyboardInterrupt (Ctrl+C) for graceful termination.  
-* Distinguish between actual Git command failures and informational messages (e.g., "no changes to commit").  
-* Provide clear error messages for common issues like missing files, invalid JSON, or Git command failures.
