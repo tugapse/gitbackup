@@ -173,3 +173,26 @@ All CLI operations are logged to a file for review and debugging:
 ----------------
 
 Contributions are welcome!
+
+{  
+    "name": "my_task_name",                 // (Required) A descriptive name for the task.  
+    "folder": "/path/to/your/repository",   // (Required) Absolute path to the Git repository.  
+    "branch": "main",                       // (Required) The Git branch to operate on (e.g., "main", "develop").  
+    "origin": "https://github.com/user/repo.git", // (Optional) The remote origin URL.  
+    "pull_before_command": true,            // (Optional, default: true) Whether to run `git pull` before `pre_command`.  
+    "pre_command": "echo 'Running before Git ops'", // (Optional) Shell command to execute before Git add/commit/push.  
+    "commit_message": "Automated commit by git-automation", // (Required) The commit message to use.  
+    "push_after_command": true,             // (Optional, default: true) Whether to run `git push` after `post_command`.  
+    "post_command": "echo 'Running after Git ops'" // (Optional) Shell command to execute after Git add/commit/push.  
+}
+```
+**Note on pre\_command and post\_command**:
+
+* These fields expect a single string that will be executed as a shell command.  
+* In \--update mode, pre\_command and post\_command are **always skipped**.
+
+## **Logging**
+
+* **Console Output**: Provides clean, color-coded messages (Success, Step, Info, Warning, Error) without verbose prefixes, allowing for quick visual scanning of the workflow progress and status.  
+
+* **Log File**: A detailed log file (git\_automation.log in your config directory's logs subfolder) captures all messages, including debug output, with timestamps and full context, regardless of the console verbosity setting. This is useful for debugging and auditing past runs.
