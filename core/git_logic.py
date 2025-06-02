@@ -1,48 +1,39 @@
-# core/git_logic.py
 
 import subprocess
 import os
 from core.logger import log
 from core.messages import MESSAGES
 
-def _run_git_command(command_parts, cwd, task_name=""):
-    """
-    Internal helper to run git commands and log their output.
-    Returns (True, stdout, stderr) on success, (False, "", stderr) on failure.
-    """
-    command_str = " ".join(["git"] + command_parts)
-    # Changed level from 'verbose' to 'debug' here
-    log(MESSAGES["git_executing_command"].format(command_str, cwd), level='debug', task_name=task_name)
-    
+def _run_git_command(repo_path, command_args, task_name=""):
+    """Helper to run git commands."""
+    cmd = ['git'] + command_args
+    log(MESSAGES["git_executing_command"].format(' '.join(command_args), repo_path), level='debug', task_name=task_name)
     try:
-        process = subprocess.run(
-            ["git"] + command_parts,
-            cwd=cwd,
+        result = subprocess.run(
+            cmd,
+            cwd=repo_path,
+            check=False, # We check returncode manually
             capture_output=True,
             text=True,
-            check=False, # We handle return code manually
-            env=os.environ
+            encoding='utf-8'
         )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log(MESSAGES["git_stdout"].format(line), level='debug', task_name=task_name)
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log(MESSAGES["git_stderr"].format(line), level='debug', task_name=task_name)
 
-        if process.stdout:
-            # Changed level from 'verbose' to 'debug' here
-            log(MESSAGES["git_stdout"].format(process.stdout.strip()), level='debug', task_name=task_name)
-        if process.stderr:
-            # Changed level from 'verbose' to 'debug' here
-            log(MESSAGES["git_stderr"].format(process.stderr.strip()), level='debug', task_name=task_name)
-
-        if process.returncode == 0:
-            return True, process.stdout.strip(), process.stderr.strip()
-        else:
-            log(MESSAGES["git_command_failed"].format(process.returncode), level='error', task_name=task_name)
-            return False, process.stdout.strip(), process.stderr.strip()
-
+        if result.returncode != 0:
+            log(MESSAGES["git_command_failed"].format(result.returncode), level='error', task_name=task_name)
+            return result.stdout.strip(), False # Return stdout even on failure for debugging
+        return result.stdout.strip(), True
     except FileNotFoundError:
-        log(MESSAGES["git_error_not_found"].format(command_parts[0]), level='error', task_name=task_name)
-        return False, "", "Git command not found."
+        log(MESSAGES["git_error_not_found"].format(cmd[0]), level='error', task_name=task_name)
+        return None, False
     except Exception as e:
         log(MESSAGES["git_error_unexpected"].format(e), level='error', task_name=task_name)
-        return False, "", str(e)
+        return None, False
 
 def is_git_repo(path, task_name=""):
     """Checks if the given path is a valid Git repository."""
@@ -59,129 +50,143 @@ def init_repo(path, task_name=""):
         log(MESSAGES["git_repo_already_exists"].format(path), level='info', task_name=task_name)
         return True # Already a repo, consider it successful initialization
 
-    log(MESSAGES["git_initializing_repo"].format(path), level='normal', task_name=task_name)
-    
-    # Ensure the directory exists
+    log(MESSAGES["git_initializing_repo"], level='normal', task_name=task_name)
     if not os.path.exists(path):
         try:
             os.makedirs(path)
-            log(MESSAGES["git_created_dir_for_repo"].format(path), level='normal', task_name=task_name)
+            log(MESSAGES["git_created_dir_for_repo"].format(path), level='info', task_name=task_name)
         except OSError as e:
             log(MESSAGES["git_error_creating_dir"].format(path, e), level='error', task_name=task_name)
             return False
 
-    success, _, _ = _run_git_command(["init"], cwd=path, task_name=task_name)
+    _, success = _run_git_command(path, ['init'], task_name=task_name)
     if not success:
         log(MESSAGES["git_init_failed"].format(path), level='error', task_name=task_name)
         return False
     log(MESSAGES["git_init_successful"].format(path), level='success', task_name=task_name)
     return True
 
-def add_remote(path, origin_url, task_name=""):
-    """Adds a remote origin to the repository."""
+def add_remote(repo_path, origin_url, task_name=""):
+    """Adds or updates the 'origin' remote."""
+    if not origin_url:
+        log("No origin URL provided to add.", level='debug', task_name=task_name)
+        return True # Not an error if origin is empty
+
     log(MESSAGES["git_adding_remote_origin"].format(origin_url), level='normal', task_name=task_name)
-    success, _, stderr = _run_git_command(["remote", "add", "origin", origin_url], cwd=path, task_name=task_name)
-    if not success and "remote origin already exists" not in stderr:
-        log(MESSAGES["git_add_remote_failed"].format(origin_url), level='error', task_name=task_name)
+    # Check if origin already exists
+    stdout, success = _run_git_command(repo_path, ['remote'], task_name=task_name)
+    if not success:
         return False
+
+    if 'origin' in stdout.splitlines():
+        # Update existing origin
+        _, success = _run_git_command(repo_path, ['remote', 'set-url', 'origin', origin_url], task_name=task_name)
+        if not success:
+            log(MESSAGES["git_add_remote_failed"].format(origin_url), level='error', task_name=task_name)
+            return False
+    else:
+        # Add new origin
+        _, success = _run_git_command(repo_path, ['remote', 'add', 'origin', origin_url], task_name=task_name)
+        if not success:
+            log(MESSAGES["git_add_remote_failed"].format(origin_url), level='error', task_name=task_name)
+            return False
     log(MESSAGES["git_add_remote_successful"].format(origin_url), level='success', task_name=task_name)
     return True
 
-def checkout_or_create_branch(path, branch_name, origin_url=None, task_name=""):
-    """Checks out an existing branch or creates a new one if it doesn't exist locally/remotely."""
-    log(MESSAGES["git_checkout_or_create_branch_step"].format(branch_name), level='normal', task_name=task_name)
+def checkout_or_create_branch(repo_path, branch_name, origin_url="", task_name=""):
+    """Checks out an existing branch or creates a new one, handling remote tracking."""
+    log(MESSAGES["git_checkout_or_create_branch_step"].format(branch_name), level='step', task_name=task_name)
 
-    # Check if branch exists locally
-    success_local, stdout_local, _ = _run_git_command(["branch", "--list", branch_name], cwd=path, task_name=task_name)
-    if success_local and stdout_local.strip():
+    # Use 'git rev-parse --verify' to reliably check if a local branch exists
+    local_branch_exists = False
+    _, success_check = _run_git_command(repo_path, ['rev-parse', '--verify', branch_name], task_name=task_name)
+    if success_check:
+        local_branch_exists = True
+
+    if local_branch_exists:
         log(MESSAGES["git_branch_found_local"].format(branch_name), level='info', task_name=task_name)
         log(MESSAGES["git_attempting_checkout_existing"].format(branch_name), level='normal', task_name=task_name)
-        success_checkout, _, _ = _run_git_command(["checkout", branch_name], cwd=path, task_name=task_name)
-        if success_checkout:
-            log(MESSAGES["git_checkout_successful"].format(branch_name), level='success', task_name=task_name)
-            return True
-        else:
+        _, success = _run_git_command(repo_path, ['checkout', branch_name], task_name=task_name)
+        if not success:
             log(MESSAGES["git_checkout_failed"].format(branch_name), level='error', task_name=task_name)
             return False
-
-    log(MESSAGES["git_branch_not_found_local"].format(branch_name), level='info', task_name=task_name)
-
-    # If not local, try to fetch from remote to see if it exists there
-    if origin_url:
-        _run_git_command(["fetch", "origin"], cwd=path, task_name=task_name) # Fetch latest
-        success_remote, stdout_remote, _ = _run_git_command(["branch", "--remotes", "--list", f"origin/{branch_name}"], cwd=path, task_name=task_name)
-        if success_remote and stdout_remote.strip():
-            log(MESSAGES["git_branch_found_remote"].format(branch_name, "origin"), level='info', task_name=task_name)
-            # Checkout tracking branch
-            success_checkout, _, _ = _run_git_command(["checkout", "-t", f"origin/{branch_name}"], cwd=path, task_name=task_name)
-            if success_checkout:
+        log(MESSAGES["git_checkout_successful"].format(branch_name), level='success', task_name=task_name)
+        return True
+    else:
+        log(MESSAGES["git_branch_not_found_local"].format(branch_name), level='info', task_name=task_name)
+        
+        # Check if branch exists on remote
+        remote_branch_exists = False
+        if origin_url:
+            stdout_remote, success_remote = _run_git_command(repo_path, ['ls-remote', '--heads', 'origin', branch_name], task_name=task_name)
+            if success_remote and f'refs/heads/{branch_name}' in stdout_remote:
+                remote_branch_exists = True
+                log(MESSAGES["git_branch_found_remote"].format(branch_name, 'origin'), level='info', task_name=task_name)
+                # Checkout remote branch as a new local tracking branch
+                _, success = _run_git_command(repo_path, ['checkout', '--track', f'origin/{branch_name}'], task_name=task_name)
+                if not success:
+                    log(MESSAGES["git_checkout_failed"].format(branch_name), level='error', task_name=task_name)
+                    return False
                 log(MESSAGES["git_checkout_successful"].format(branch_name), level='success', task_name=task_name)
                 return True
-            else:
-                log(MESSAGES["git_checkout_failed"].format(branch_name), level='error', task_name=task_name)
-                return False
-        else:
-            log(MESSAGES["git_branch_not_found_remote"].format(branch_name, "origin"), level='info', task_name=task_name)
-    
-    # If not local and not on remote, create new branch
-    log(MESSAGES["git_creating_new_branch"].format(branch_name), level='normal', task_name=task_name)
-    success_create, _, _ = _run_git_command(["checkout", "-b", branch_name], cwd=path, task_name=task_name)
-    if not success_create:
-        log(MESSAGES["git_create_branch_failed"].format(branch_name), level='error', task_name=task_name)
-        return False
-    log(MESSAGES["git_create_checkout_successful"].format(branch_name), level='success', task_name=task_name)
+            elif not success_remote:
+                log(MESSAGES["git_branch_not_found_remote"].format(branch_name, 'origin'), level='warning', task_name=task_name)
+        
+        # If not found locally or remotely, create new branch
+        log(MESSAGES["git_creating_new_branch"].format(branch_name), level='normal', task_name=task_name)
+        _, success = _run_git_command(repo_path, ['checkout', '-b', branch_name], task_name=task_name)
+        if not success:
+            log(MESSAGES["git_create_branch_failed"].format(branch_name), level='error', task_name=task_name)
+            return False
+        
+        log(MESSAGES["git_create_checkout_successful"].format(branch_name), level='success', task_name=task_name)
 
-    # If origin was provided, push new branch to set upstream
-    if origin_url:
-        log(MESSAGES["git_pushing_new_branch"].format(branch_name, "origin", branch_name), level='normal', task_name=task_name)
-        success_push, _, _ = _run_git_command(["push", "-u", "origin", branch_name], cwd=path, task_name=task_name)
-        if not success_push:
-            log(MESSAGES["git_push_new_branch_failed_warning"].format(branch_name, "origin", branch_name), level='warning', task_name=task_name)
-            # Do not return False here, as the branch is created locally
-    
+        # Set upstream for the new branch immediately
+        if origin_url:
+            log(MESSAGES["git_pushing_new_branch"].format(branch_name, 'origin', branch_name), level='normal', task_name=task_name)
+            _, success = _run_git_command(repo_path, ['push', '-u', 'origin', branch_name], task_name=task_name)
+            if not success:
+                log(MESSAGES["git_push_new_branch_failed_warning"].format(branch_name, 'origin', branch_name), level='warning', task_name=task_name)
+                # Do not return False here, as the branch was created locally
+        
     log(MESSAGES["git_branch_op_completed"].format(branch_name), level='debug', task_name=task_name)
     return True
 
-
-def pull_updates(path, remote="origin", branch="main", task_name=""):
-    """Pulls latest updates from the remote repository."""
+def pull_updates(repo_path, branch, task_name=""):
+    """Pulls latest updates for the specified branch."""
     log(MESSAGES["git_pulling_updates"].format(branch), level='normal', task_name=task_name)
-    success, _, _ = _run_git_command(["pull", remote, branch], cwd=path, task_name=task_name)
+    _, success = _run_git_command(repo_path, ['pull', 'origin', branch], task_name=task_name)
     if not success:
         log(MESSAGES["git_pull_failed"].format(branch), level='error', task_name=task_name)
         return False
     log(MESSAGES["git_pull_successful"].format(branch), level='success', task_name=task_name)
     return True
 
-def check_for_changes(path, task_name=""):
-    """
-    Checks if there are any pending changes (staged or unstaged) in the repository.
-    Returns (True, False) if changes found, (False, False) if no changes, (False, True) on error.
-    """
-    log(MESSAGES["git_checking_status"], level='normal', task_name=task_name)
-    # Changed level from 'verbose' to 'debug' here
-    success, stdout, _ = _run_git_command(["status", "--porcelain"], cwd=path, task_name=task_name)
+def check_for_changes(repo_path, task_name=""):
+    """Checks if there are any uncommitted changes or untracked files."""
+    log(MESSAGES["git_checking_status"], level='debug', task_name=task_name)
+    stdout, success = _run_git_command(repo_path, ['status', '--porcelain'], task_name=task_name)
     if not success:
         log(MESSAGES["git_error_status_check"], level='error', task_name=task_name)
-        return False, True # Return False for changes, True for error
-
-    if stdout.strip():
-        log(MESSAGES["git_changes_detected"], level='info', task_name=task_name)
-        return True, False
+        return False, True # False for changes, True for error
+    
+    if stdout:
+        log(MESSAGES["git_changes_detected"], level='debug', task_name=task_name)
+        return True, False # True for changes, False for no error
     else:
-        log(MESSAGES["git_no_changes_detected"], level='info', task_name=task_name)
-        return False, False
+        log(MESSAGES["git_no_changes_detected"], level='debug', task_name=task_name)
+        return False, False # False for changes, False for no error
 
-def git_add_commit(path, commit_message, task_name=""):
+def git_add_commit(repo_path, commit_message, task_name=""):
     """Stages all changes and commits them."""
-    log(MESSAGES["git_staging_changes"].format("."), level='normal', task_name=task_name)
-    success, _, _ = _run_git_command(["add", "."], cwd=path, task_name=task_name)
+    log(MESSAGES["git_staging_changes"].format('.'), level='normal', task_name=task_name)
+    _, success = _run_git_command(repo_path, ['add', '.'], task_name=task_name)
     if not success:
         log(MESSAGES["git_add_failed"], level='error', task_name=task_name)
         return False
-
+    
     log(MESSAGES["git_committing_changes"].format(commit_message), level='normal', task_name=task_name)
-    success, _, _ = _run_git_command(["commit", "-m", commit_message], cwd=path, task_name=task_name)
+    _, success = _run_git_command(repo_path, ['commit', '-m', commit_message], task_name=task_name)
     if not success:
         log(MESSAGES["git_commit_failed"], level='error', task_name=task_name)
         return False
@@ -189,47 +194,49 @@ def git_add_commit(path, commit_message, task_name=""):
     log(MESSAGES["git_add_commit_successful"], level='success', task_name=task_name)
     return True
 
-def git_push(path, remote="origin", branch="main", task_name=""):
-    """Pushes committed changes to the remote repository."""
-    log(MESSAGES["git_pushing_changes"].format(remote, branch), level='normal', task_name=task_name)
-    success, _, _ = _run_git_command(["push", remote, branch], cwd=path, task_name=task_name)
+def git_push(repo_path, branch, task_name=""):
+    """Pushes changes to the remote repository."""
+    log(MESSAGES["git_pushing_changes"].format('origin', branch), level='normal', task_name=task_name)
+    _, success = _run_git_command(repo_path, ['push', 'origin', branch], task_name=task_name)
     if not success:
-        log(MESSAGES["git_push_failed"].format(remote, branch), level='error', task_name=task_name)
+        log(MESSAGES["git_push_failed"].format('origin', branch), level='error', task_name=task_name)
         return False
     log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
     return True
 
-def stash_local_changes(path, task_name=""):
-    """Stashes local changes."""
+def stash_local_changes(repo_path, task_name=""):
+    """Stashes local changes including untracked files."""
     log(MESSAGES["git_changes_found_stashing"], level='normal', task_name=task_name)
-    # Changed level from 'verbose' to 'debug' for internal stash command execution log
-    success, stdout, stderr = _run_git_command(["stash", "save", "--include-untracked", "Automated stash"], cwd=path, task_name=task_name)
-    if not success and "No local changes to save" not in stdout and "No local changes to save" not in stderr:
-        log(MESSAGES["git_stash_failed"].format(stderr), level='error', task_name=task_name)
+    # Using --include-untracked to stash new files too
+    stdout, success = _run_git_command(repo_path, ['stash', 'save', '--include-untracked', 'git-automation-temp-stash'], task_name=task_name)
+    # Check stdout for "No local changes to save" instead of stderr for success check
+    if not success and "No local changes to save" not in stdout:
+        # A true failure if success is False and it's not just "no changes"
+        log(MESSAGES["git_stash_failed"].format("Failed to save stash."), level='error', task_name=task_name)
         return False
     
-    if "No local changes to save" in stdout or "No local changes to save" in stderr:
-        log(MESSAGES["git_no_changes_to_stash"], level='normal', task_name=task_name)
-    else:
-        log(MESSAGES["git_stash_successful"], level='success', task_name=task_name)
+    if "No local changes to save" in stdout:
+        log(MESSAGES["git_no_changes_to_stash"], level='info', task_name=task_name)
+        return True # Still considered successful as no action was needed
+    
+    log(MESSAGES["git_stash_successful"], level='success', task_name=task_name)
     return True
 
-def pop_stashed_changes(path, task_name=""):
-    """Applies the most recent stash."""
+def pop_stashed_changes(repo_path, task_name=""):
+    """Applies stashed changes back."""
     log(MESSAGES["git_stash_pop_applying"], level='normal', task_name=task_name)
-    # Changed level from 'verbose' to 'debug' for internal stash command execution log
-    success, stdout, stderr = _run_git_command(["stash", "pop"], cwd=path, task_name=task_name)
+    # Check if there's anything in the stash using 'git stash list'
+    stdout_list, success_list = _run_git_command(repo_path, ['stash', 'list'], task_name=task_name)
+    if not success_list or not stdout_list:
+        log(MESSAGES["git_stash_pop_no_stash"], level='info', task_name=task_name)
+        return True # Nothing to pop, so successful
 
+    stdout, success = _run_git_command(repo_path, ['stash', 'pop'], task_name=task_name)
     if not success:
-        if "No stash entries found" in stdout or "No stash entries found" in stderr:
-            log(MESSAGES["git_stash_pop_no_stash"], level='normal', task_name=task_name)
-            return True # No stash to pop, consider successful
-        elif "Merge conflict" in stdout or "Merge conflict" in stderr:
+        if "Merge conflict" in stdout or "could not apply all your changes" in stdout:
             log(MESSAGES["git_stash_pop_failed_conflict"], level='error', task_name=task_name)
-            return False
         else:
-            log(MESSAGES["git_stash_pop_failed_general"].format(stderr), level='error', task_name=task_name)
-            return False
-    
+            log(MESSAGES["git_stash_pop_failed_general"].format(stdout.strip()), level='error', task_name=task_name)
+        return False
     log(MESSAGES["git_stash_pop_successful"], level='success', task_name=task_name)
     return True

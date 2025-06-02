@@ -1,246 +1,280 @@
-# core/workflow_logic.py
-
+import subprocess
 import os
+import shutil
+from types import SimpleNamespace
+
 from core.logger import log
 from core.messages import MESSAGES
-from core.git_logic import (
-    is_git_repo, init_repo, add_remote, checkout_or_create_branch,
-    pull_updates, check_for_changes, git_add_commit, git_push,
-    stash_local_changes, pop_stashed_changes
-)
-from core.command_logic import execute_command
 
-def run_task_workflow(args, task, config_file_path):
-    """
-    Runs the standard Git automation task workflow.
-    
-    Args:
-        args (argparse.Namespace): The parsed command-line arguments.
-        task (dict): The task configuration loaded from the JSON file.
-        config_file_path (str): The path to the task's configuration file.
-    """
-    task_name = task.get("name", "Unnamed Task")
-    log_prefix = f"[{task_name}]"
+def _is_git_repo(folder_path):
+    """Checks if the given folder is a Git repository."""
+    return os.path.isdir(os.path.join(folder_path, '.git'))
 
-    log(MESSAGES["workflow_start_task"].format(config_file_path), level='step', task_name=task_name)
-
-    # --- 1. Get and confirm configuration values ---
-    git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
-    branch = args.branch if args.branch is not None else task.get("branch", "main")
-    origin = args.origin if args.origin is not None else task.get("origin")
-    command_line = task.get("command_line", "")
-    git_commit_message = task.get("git_commit_message", f"Automated update for {task_name}")
-
-    if not git_repo_path:
-        log(MESSAGES["workflow_error_missing_repo_path"].format(task_name), level='error', task_name=task_name)
-        log(MESSAGES["workflow_task_aborted_missing_info"].format(task_name), level='error', task_name=task_name)
+def _execute_git_command(command_parts, cwd, task_name, log_level='info'):
+    """Executes a Git command and logs its output."""
+    cmd_str = " ".join(command_parts)
+    log(MESSAGES["git_executing_command"].format(cmd_str), level='debug', task_name=task_name)
+    try:
+        result = subprocess.run(
+            command_parts,
+            cwd=cwd,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log(f"  OUT: {line}", level='debug', task_name=task_name)
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='debug', task_name=task_name) # Git stderr often contains info
+        return True
+    except subprocess.CalledProcessError as e:
+        # --- START CHANGES HERE ---
+        # Check if the error is due to "nothing to commit" for a git commit command
+        if command_parts[0] == 'git' and command_parts[1] == 'commit':
+            # Check for Portuguese and English "nothing to commit" messages
+            # Git sends this message to stdout even on error exit code 1
+            output_combined = (e.stdout or "") + (e.stderr or "")
+            if "nada a memorizar, árvore-trabalho limpa" in output_combined or \
+               "nothing to commit, working tree clean" in output_combined or \
+               "no changes added to commit" in output_combined: # Another common message
+                log(MESSAGES["git_no_changes_to_commit"], level='info', task_name=task_name)
+                # Still log the output as debug for full context in the log file
+                if e.stdout:
+                    for line in e.stdout.strip().splitlines():
+                        log(f"  OUT: {line}", level='debug', task_name=task_name)
+                if e.stderr:
+                    for line in e.stderr.strip().splitlines():
+                        log(f"  ERR: {line}", level='debug', task_name=task_name)
+                return True # Treat "no changes" as a successful, albeit non-op, commit
+        
+        # If it's not a "nothing to commit" error, or not a commit command, log as actual error
+        log(MESSAGES["git_command_failed"].format(cmd_str, e.returncode), level='error', task_name=task_name)
+        if e.stdout:
+            for line in e.stdout.strip().splitlines():
+                log(f"  OUT: {line}", level='error', task_name=task_name)
+        if e.stderr:
+            for line in e.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='error', task_name=task_name)
+        return False
+        # --- END CHANGES HERE ---
+    except FileNotFoundError:
+        log(MESSAGES["git_not_found"], level='error', task_name=task_name)
+        return False
+    except Exception as e:
+        log(MESSAGES["git_command_exception"].format(cmd_str, e), level='error', task_name=task_name)
         return False
 
-    log(MESSAGES["workflow_task_details"].format(task_name), level='normal')
-    log(MESSAGES["workflow_git_repo_path"].format(git_repo_path, MESSAGES["info_cli_from_arg"] if args.folder is not None else MESSAGES["info_cli_from_config"]), level='normal')
-    log(MESSAGES["workflow_branch"].format(branch, MESSAGES["info_cli_from_arg"] if args.branch is not None else MESSAGES["info_cli_from_config_default"].format("main")), level='normal')
-    log(MESSAGES["workflow_origin"].format(origin if origin else 'Not specified', MESSAGES["info_cli_from_arg"] if args.origin is not None else MESSAGES["info_cli_from_config_default"].format('Not specified')), level='normal')
-    
-    if command_line:
-        log(MESSAGES["workflow_pre_commit_command"].format(command_line), level='normal')
-    else:
-        log(MESSAGES["workflow_no_pre_commit_command"], level='normal')
-    
-    log(MESSAGES["workflow_commit_message"].format(git_commit_message), level='normal')
+def _execute_command(command_line, cwd, task_name):
+    """Executes a general shell command."""
+    if not command_line:
+        return True # No command to execute
 
-    # --- 2. Initialize repository if necessary ---
-    if not is_git_repo(git_repo_path, task_name):
-        log(MESSAGES["workflow_repo_not_found_init_attempt"].format(git_repo_path), level='warning', task_name=task_name)
+    log(MESSAGES["cmd_executing"].format(command_line), level='step', task_name=task_name)
+    try:
+        # Using shell=True to allow complex commands and piping, but beware of shell injection
+        result = subprocess.run(
+            command_line,
+            cwd=cwd,
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log(f"  {line}", level='debug', task_name=task_name)
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='warning', task_name=task_name)
+        log(MESSAGES["cmd_finished_successfully"], level='success', task_name=task_name)
+        return True
+    except subprocess.CalledProcessError as e:
+        log(MESSAGES["cmd_failed_exit_code"].format(command_line, e.returncode), level='error', task_name=task_name)
+        if e.stdout:
+            for line in e.stdout.strip().splitlines():
+                log(f"  OUT: {line}", level='error', task_name=task_name)
+        if e.stderr:
+            for line in e.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='error', task_name=task_name)
+        return False
+    except FileNotFoundError:
+        log(MESSAGES["cmd_not_found"].format(command_line.split()[0]), level='error', task_name=task_name)
+        return False
+    except Exception as e:
+        log(MESSAGES["cmd_exception"].format(command_line, e), level='error', task_name=task_name)
+        return False
+
+def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_path: str):
+    """
+    Executes the full Git automation workflow for a given task.
+    """
+    task_name = task.name
+
+    log(MESSAGES["workflow_start"].format(task_name), level='info', task_name=task_name)
+    
+    repo_path = task.folder
+    branch = task.branch
+    origin_url = task.origin
+
+    # Ensure repository directory exists
+    if not os.path.exists(repo_path):
+        log(MESSAGES["workflow_creating_folder"].format(repo_path), level='step', task_name=task_name)
+        try:
+            os.makedirs(repo_path, exist_ok=True)
+            log(MESSAGES["workflow_folder_created"], level='success', task_name=task_name)
+        except Exception as e:
+            log(MESSAGES["workflow_folder_creation_failed"].format(repo_path, e), level='error', task_name=task_name)
+            return
+
+    # Check if it's a Git repository and initialize if needed
+    if not _is_git_repo(repo_path):
         if args.initialize:
-            if not init_repo(git_repo_path, task_name):
-                log(MESSAGES["workflow_repo_init_failed"].format(task_name), level='error', task_name=task_name)
-                log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-                return False
-            else:
-                log(MESSAGES["workflow_repo_init_success"], level='success', task_name=task_name)
-                if origin and not add_remote(git_repo_path, origin, task_name):
-                    log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-                    return False
+            log(MESSAGES["git_initializing_repo"].format(repo_path), level='step', task_name=task_name)
+            if not _execute_git_command(['git', 'init'], cwd=repo_path, task_name=task_name):
+                return
+            if origin_url:
+                log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
+                if not _execute_git_command(['git', 'remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name):
+                    return
+            log(MESSAGES["git_repo_initialized"], level='success', task_name=task_name)
         else:
-            log(MESSAGES["workflow_error_repo_not_valid"].format(git_repo_path, task_name), level='error', task_name=task_name)
-            log(MESSAGES["workflow_hint_use_initialize"], level='info', task_name=task_name)
-            log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-            return False
+            log(MESSAGES["git_not_repo_and_not_init"].format(repo_path), level='error', task_name=task_name)
+            return
+    elif origin_url and not _execute_git_command(['git', 'remote', 'get-url', 'origin'], cwd=repo_path, task_name=task_name):
+        # If it is a git repo but no origin set, add it
+        log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
+        if not _execute_git_command(['git', 'remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name):
+            return
+
+    # Checkout or switch to the specified branch
+    log(MESSAGES["git_checking_out_branch"].format(branch), level='step', task_name=task_name)
+    if not _execute_git_command(['git', 'checkout', branch], cwd=repo_path, task_name=task_name):
+        # If checkout fails, try to create and checkout the branch
+        log(MESSAGES["git_branch_checkout_failed_try_create"].format(branch), level='warning', task_name=task_name)
+        if not _execute_git_command(['git', 'checkout', '-b', branch], cwd=repo_path, task_name=task_name):
+            log(MESSAGES["git_branch_creation_failed"].format(branch), level='error', task_name=task_name)
+            return
+    log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
+
+    # Pull latest changes if configured
+    if task.pull_before_command:
+        log(MESSAGES["git_pulling_latest"], level='step', task_name=task_name)
+        if not _execute_git_command(['git', 'pull', 'origin', branch], cwd=repo_path, task_name=task_name):
+            return
+        log(MESSAGES["git_pull_successful"], level='success', task_name=task_name)
+
+    # Execute pre-command
+    if task.pre_command:
+        log(MESSAGES["workflow_executing_pre_command"], level='step', task_name=task_name)
+        if not _execute_command(task.pre_command, cwd=repo_path, task_name=task_name):
+            log(MESSAGES["workflow_pre_command_failed"], level='error', task_name=task_name)
+            return
+        log(MESSAGES["workflow_pre_command_successful"], level='success', task_name=task_name)
+
+    # Add all changes and commit
+    log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
+    if not _execute_git_command(['git', 'add', '.'], cwd=repo_path, task_name=task_name):
+        return
+    log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
+
+    log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
+    # The _execute_git_command function now handles the "no changes to commit" gracefully
+    if not _execute_git_command(['git', 'commit', '-m', task.commit_message], cwd=repo_path, task_name=task_name):
+        # If it returns False here, it means it was a genuine commit error, not just "no changes"
+        return
     else:
-        log(MESSAGES["workflow_repo_found"].format(git_repo_path), level='normal', task_name=task_name)
+        # If it returned True, either a commit was made, or there were no changes (which is handled gracefully)
+        # We don't need to specifically log 'changes committed' here as _execute_git_command handles "no changes"
+        pass
 
-    # --- 3. Checkout/create branch ---
-    if not checkout_or_create_branch(git_repo_path, branch, origin, task_name):
-        log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-        return False
 
-    # --- 4. Initial Pull (always a good idea before operations) ---
-    log(MESSAGES["workflow_initial_pull"], level='step', task_name=task_name)
-    if not pull_updates(git_repo_path, "origin", branch, task_name):
-        log(MESSAGES["workflow_initial_pull_failed"].format(task_name), level='error', task_name=task_name)
-        return False
-    log(MESSAGES["workflow_initial_pull_success"], level='success', task_name=task_name)
+    # Push changes if configured
+    if task.push_after_command:
+        log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
+        if not _execute_git_command(['git', 'push', 'origin', branch], cwd=repo_path, task_name=task_name):
+            return
+        log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
 
-    # --- 5. Execute pre-commit command (if any) ---
-    if command_line:
-        log(MESSAGES["workflow_executing_command_line"], level='step', task_name=task_name)
-        if execute_command(command_line, task_name, cwd=git_repo_path):
-            log(MESSAGES["workflow_command_execution_success"], level='success', task_name=task_name)
-        else:
-            log(MESSAGES["workflow_command_execution_failed"].format(task_name), level='error', task_name=task_name)
-            return False # Abort if pre-commit command fails
-    else:
-        log(MESSAGES["workflow_no_command_line"], level='normal', task_name=task_name)
+    # Execute post-command
+    if task.post_command:
+        log(MESSAGES["workflow_executing_post_command"], level='step', task_name=task_name)
+        if not _execute_command(task.post_command, cwd=repo_path, task_name=task_name):
+            log(MESSAGES["workflow_post_command_failed"], level='error', task_name=task_name)
+            return
+        log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
 
-    # --- 6. Check for changes, commit, and push ---
-    log(MESSAGES["workflow_checking_for_changes"], level='step', task_name=task_name)
-    has_changes, error_checking = check_for_changes(git_repo_path, task_name)
-    if error_checking:
-        log(MESSAGES["workflow_error_diff_check_failed"].format(task_name), level='error', task_name=task_name)
-        return False
+    log(MESSAGES["workflow_completed"].format(task_name), level='success', task_name=task_name)
 
-    if has_changes:
-        log(MESSAGES["workflow_changes_detected_add_commit"], level='normal', task_name=task_name)
-        if not git_add_commit(git_repo_path, git_commit_message, task_name):
-            log(MESSAGES["workflow_git_add_commit_failed"].format(task_name), level='error', task_name=task_name)
-            return False
-        log(MESSAGES["workflow_git_add_commit_success"], level='success', task_name=task_name)
 
-        log(MESSAGES["workflow_commits_made_push"], level='normal', task_name=task_name)
-        if not git_push(git_repo_path, "origin", branch, task_name):
-            log(MESSAGES["workflow_git_push_failed_warning"].format(task_name), level='warning', task_name=task_name)
-            # Do not return False here, allow final pull even if push failed
-        log(MESSAGES["workflow_git_push_success"], level='success', task_name=task_name)
-    else:
-        log(MESSAGES["workflow_no_changes_skip_commit"], level='normal', task_name=task_name)
-        log(MESSAGES["workflow_no_commits_skip_push"], level='normal', task_name=task_name)
-
-    # --- 7. Final Pull (post-push sync) ---
-    log(MESSAGES["workflow_final_pull"], level='step', task_name=task_name)
-    if not pull_updates(git_repo_path, "origin", branch, task_name):
-        log(MESSAGES["workflow_final_pull_failed_warning"].format(task_name), level='warning', task_name=task_name)
-    log(MESSAGES["workflow_final_pull_success"], level='success', task_name=task_name)
-    
-    log(MESSAGES["workflow_task_completed_success"].format(task_name), level='success', task_name=task_name)
-    return True
-
-def run_update_task_workflow(args, task, config_file_path):
+def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_path: str):
     """
-    Runs a streamlined update workflow: stash, pull, pop stash, commit, push, final pull.
-    The pre-commit command is explicitly skipped when using this workflow.
-    
-    Args:
-        args (argparse.Namespace): The parsed command-line arguments.
-        task (dict): The task configuration loaded from the JSON file.
-        config_file_path (str): The path to the task's configuration file.
+    Executes a simplified update workflow focused on pull/commit/push.
+    This version skips pre_command and post_command.
     """
-    task_name = task.get("name", "Unnamed Task")
-    log(MESSAGES["workflow_start_update_task"].format(task_name), level='step', task_name=task_name)
+    task_name = task.name
 
-    # --- 1. Get and confirm configuration values (with overrides) ---
-    git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
-    branch = args.branch if args.branch is not None else task.get("branch", "main")
-    origin = args.origin if args.origin is not None else task.get("origin")
-    # When --update is used, explicitly disable the command_line
-    command_line = "" # This makes sure the pre-commit command is NOT run
-    git_commit_message = task.get("git_commit_message", f"Automated update for {task_name}")
+    log(MESSAGES["update_workflow_start"].format(task_name), level='info', task_name=task_name)
 
-    if not git_repo_path:
-        log(MESSAGES["workflow_error_missing_repo_path"].format(task_name), level='error', task_name=task_name)
-        log(MESSAGES["workflow_task_aborted_missing_info"].format(task_name), level='error', task_name=task_name)
-        return False
+    repo_path = task.folder
+    branch = task.branch
+    origin_url = task.origin
 
-    log(MESSAGES["workflow_task_details"].format(task_name), level='normal')
-    log(MESSAGES["workflow_git_repo_path"].format(git_repo_path, MESSAGES["info_cli_from_arg"] if args.folder is not None else MESSAGES["info_cli_from_config"]), level='normal')
-    log(MESSAGES["workflow_branch"].format(branch, MESSAGES["info_cli_from_arg"] if args.branch is not None else MESSAGES["info_cli_from_config_default"].format("main")), level='normal')
-    log(MESSAGES["workflow_origin"].format(origin if origin else 'Not specified', MESSAGES["info_cli_from_arg"] if args.origin is not None else MESSAGES["info_cli_from_config_default"].format('Not specified')), level='normal')
+    # Ensure repository directory exists and is a Git repo
+    if not os.path.exists(repo_path):
+        log(MESSAGES["update_error_folder_not_found"].format(repo_path), level='error', task_name=task_name)
+        return
+    if not _is_git_repo(repo_path):
+        log(MESSAGES["update_error_not_git_repo"].format(repo_path), level='error', task_name=task_name)
+        return
     
-    # Message reflecting that the command is skipped for update workflow
-    log(MESSAGES["workflow_no_pre_commit_command"], level='info', task_name=task_name)
-    
-    log(MESSAGES["workflow_commit_message"].format(git_commit_message), level='normal')
+    # Ensure origin is set if it was defined in config
+    if origin_url:
+        log(MESSAGES["git_checking_remote"].format(origin_url), level='debug', task_name=task_name)
+        # Check if origin is already set or add it
+        result = subprocess.run(['git', 'remote', '-v'], cwd=repo_path, capture_output=True, text=True)
+        if origin_url not in result.stdout:
+            log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
+            if not _execute_git_command(['git', 'remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name):
+                return
 
-    # --- 2. Validate repository ---
-    if not is_git_repo(git_repo_path, task_name):
-        log(MESSAGES["workflow_error_repo_not_valid_update"].format(git_repo_path, task_name), level='error', task_name=task_name)
-        log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-        return False
+    # Checkout or switch to the specified branch
+    log(MESSAGES["git_checking_out_branch"].format(branch), level='step', task_name=task_name)
+    if not _execute_git_command(['git', 'checkout', branch], cwd=repo_path, task_name=task_name):
+        log(MESSAGES["git_branch_checkout_failed"].format(branch), level='error', task_name=task_name)
+        return
+    log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
+
+    # Pull latest changes (always perform pull in update mode)
+    log(MESSAGES["git_pulling_latest"], level='step', task_name=task_name)
+    if not _execute_git_command(['git', 'pull', 'origin', branch], cwd=repo_path, task_name=task_name):
+        return
+    log(MESSAGES["git_pull_successful"], level='success', task_name=task_name)
+
+    # Add all changes and commit
+    log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
+    if not _execute_git_command(['git', 'add', '.'], cwd=repo_path, task_name=task_name):
+        return
+    log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
+
+    log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
+    # The _execute_git_command function now handles the "no changes to commit" gracefully
+    if not _execute_git_command(['git', 'commit', '-m', task.commit_message], cwd=repo_path, task_name=task_name):
+        # If it returns False here, it means it was a genuine commit error, not just "no changes"
+        return
     else:
-        log(MESSAGES["workflow_repo_found"].format(git_repo_path), level='normal', task_name=task_name)
+        # If it returned True, either a commit was made, or there were no changes (which is handled gracefully)
+        # We don't need to specifically log 'changes committed' here as _execute_git_command handles "no changes"
+        pass
 
-    # --- 3. Checkout/create branch ---
-    if not checkout_or_create_branch(git_repo_path, branch, origin, task_name):
-        log(MESSAGES["workflow_task_aborted_repo_setup"].format(task_name), level='error', task_name=task_name)
-        return False
+    # Push changes (always perform push in update mode)
+    if task.push_after_command:
+        log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
+        if not _execute_git_command(['git', 'push', 'origin', branch], cwd=repo_path, task_name=task_name):
+            return
+        log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
 
-    # --- 4. Stash local changes before pulling ---
-    log(MESSAGES["git_checking_local_changes_for_stash"], level='normal', task_name=task_name)
-    has_changes, error_checking = check_for_changes(git_repo_path, task_name)
-    if error_checking:
-        log(MESSAGES["workflow_error_diff_check_failed"].format(task_name), level='error', task_name=task_name)
-        return False
-
-    stashed = False
-    if has_changes:
-        log(MESSAGES["git_changes_found_stashing"], level='normal', task_name=task_name)
-        if not stash_local_changes(git_repo_path, task_name):
-            log(MESSAGES["git_stash_failed"].format(task_name), level='error', task_name=task_name)
-            return False
-        stashed = True
-    else:
-        log(MESSAGES["git_no_changes_to_stash"], level='normal', task_name=task_name)
-
-    # --- 5. Pull updates ---
-    log(MESSAGES["workflow_pre_commit_pull"], level='step', task_name=task_name)
-    if not pull_updates(git_repo_path, "origin", branch, task_name):
-        log(MESSAGES["workflow_pre_commit_pull_failed"].format(task_name), level='error', task_name=task_name)
-        if stashed:
-            # Attempt to pop stash even if pull failed, to restore state
-            log(MESSAGES["git_stash_pop_applying"], level='info', task_name=task_name)
-            pop_stashed_changes(git_repo_path, task_name) # Logged internally
-        log(MESSAGES["workflow_update_aborted_pull_failed"].format(task_name), level='error', task_name=task_name)
-        return False
-    log(MESSAGES["workflow_pre_commit_pull_success"], level='success', task_name=task_name)
-
-    # --- 6. Pop stashed changes (if any) ---
-    if stashed:
-        log(MESSAGES["git_stash_pop_applying"], level='step', task_name=task_name)
-        if not pop_stashed_changes(git_repo_path, task_name):
-            # If pop fails, warn but try to continue to commit remaining changes
-            log(MESSAGES["git_stash_pop_failed_conflict"], level='warning', task_name=task_name)
-            # The user will need to resolve conflicts manually
-
-    # --- 7. Pre-commit command is explicitly skipped for --update workflow
-    log(MESSAGES["workflow_no_command_line"], level='normal', task_name=task_name) # Reinforce that it's skipped
-
-    # --- 8. Check for changes, commit, and push ---
-    log(MESSAGES["workflow_checking_for_changes"], level='step', task_name=task_name)
-    has_changes, error_checking = check_for_changes(git_repo_path, task_name)
-    if error_checking:
-        log(MESSAGES["workflow_error_diff_check_failed"].format(task_name), level='error', task_name=task_name)
-        return False
-
-    if has_changes:
-        log(MESSAGES["workflow_changes_detected_add_commit"], level='normal', task_name=task_name)
-        if not git_add_commit(git_repo_path, git_commit_message, task_name):
-            log(MESSAGES["workflow_git_add_commit_failed"].format(task_name), level='error', task_name=task_name)
-            return False
-        log(MESSAGES["workflow_git_add_commit_success"], level='success', task_name=task_name)
-
-        log(MESSAGES["workflow_commits_made_push"], level='normal', task_name=task_name)
-        if not git_push(git_repo_path, "origin", branch, task_name):
-            log(MESSAGES["workflow_git_push_failed_warning"].format(task_name), level='warning', task_name=task_name)
-            # Do not return False here, allow final pull even if push failed
-        log(MESSAGES["workflow_git_push_success"], level='success', task_name=task_name)
-    else:
-        log(MESSAGES["workflow_no_changes_skip_commit"], level='normal', task_name=task_name)
-        log(MESSAGES["workflow_no_commits_skip_push"], level='normal', task_name=task_name)
-
-    # --- 9. Final Pull (post-push sync) ---
-    log(MESSAGES["workflow_final_pull"], level='step', task_name=task_name)
-    if not pull_updates(git_repo_path, "origin", branch, task_name):
-        log(MESSAGES["workflow_final_pull_failed_warning"].format(task_name), level='warning', task_name=task_name)
-    log(MESSAGES["workflow_final_pull_success"], level='success', task_name=task_name)
-    
-    log(MESSAGES["workflow_task_completed_success"].format(task_name), level='success', task_name=task_name)
-    return True
+    log(MESSAGES["update_workflow_completed"].format(task_name), level='success', task_name=task_name)

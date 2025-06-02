@@ -1,8 +1,7 @@
-# core/logger.py
-
 from datetime import datetime
 import os
-from core.messages import MESSAGES
+import sys
+# from core.messages import MESSAGES # No longer needed directly in logger.py
 
 # ANSI escape codes for colors
 class Colors:
@@ -54,8 +53,6 @@ def clear_log_file():
     try:
         with open(log_file_path, 'w') as f: # 'w' mode truncates the file
             f.write(f"--- Log Cleared at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} ---\n")
-        # Do NOT log this message using `log()` function, as it would cause an infinite loop
-        # if log() attempts to write to the file while it's being cleared.
     except IOError as e:
         print(f"Error: Failed to clear log file {log_file_path}: {e}")
 
@@ -66,46 +63,24 @@ def log(message, level='info', task_name=""):
     
     Args:
         message (str): The message to log.
-        level (str): The log level ('debug', 'info', 'normal', 'step', 'success', 'warning', 'error').
-        task_name (str): Optional name of the task, prepended to the log message.
+        level (str): The log level ('debug', 'info', 'normal', 'step', 'success', 'warning', 'error', 'critical').
+        task_name (str): Optional name of the task, only used for log file consistency now.
     """
     global _verbose_enabled
     
     # Define which levels are displayed by default (without --verbose)
-    default_display_levels = ['info', 'step', 'normal', 'success', 'warning', 'error']
+    default_display_levels = ['info', 'step', 'normal', 'success', 'warning', 'error', 'critical']
 
     # Determine if this message should be displayed to the console
-    display_to_console = _verbose_enabled or (level in default_display_levels)
+    # Debug messages only show if verbose is enabled
+    display_to_console = _verbose_enabled or (level in default_display_levels and level != 'debug')
     
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Determine prefix based on log level
-    level_map = {
-        'debug': MESSAGES.get('log_level_debug', 'DEBUG'),
-        'info': MESSAGES.get('log_level_info', 'INFO'),
-        'normal': MESSAGES.get('log_level_normal', ''),
-        'step': MESSAGES.get('log_level_step', 'STEP'),
-        'success': MESSAGES.get('log_level_success', 'SUCCESS'),
-        'warning': MESSAGES.get('log_level_warning', 'WARNING'),
-        'error': MESSAGES.get('log_level_error', 'ERROR'),
-    }
+    # --- Construct message for CONSOLE ---
+    # The 'message' parameter directly contains any icons or specific phrasing.
+    console_message = message
     
-    prefix = level_map.get(level, level.upper())
-    
-    # Format the prefix for display
-    if prefix:
-        display_prefix = f"[{prefix}]"
-    else:
-        display_prefix = "" # For 'normal' level
-
-    # Apply task name prefix
-    if task_name and level != 'normal':
-        formatted_message = f"[{task_name}] {display_prefix} {message}"
-    else:
-        formatted_message = f"{display_prefix} {message}"
-    
-    log_line_to_file = f"{timestamp} {formatted_message}" # Log file gets no colors
-
     # Determine color for console output
     color_map = {
         'debug': Colors.GRAY,
@@ -115,12 +90,19 @@ def log(message, level='info', task_name=""):
         'success': Colors.GREEN,
         'warning': Colors.YELLOW,
         'error': Colors.RED + Colors.BOLD, # Make errors bold
+        'critical': Colors.RED + Colors.BOLD # Critical errors also bold red
     }
-    color_code = color_map.get(level, Colors.RESET) # Default to no color
+    color_code = color_map.get(level, Colors.RESET)
     
     # Print to console only if allowed by verbosity settings, with color
     if display_to_console:
-        print(f"{color_code}{formatted_message}{Colors.RESET}")
+        print(f"{color_code}{console_message}{Colors.RESET}")
+
+    # --- Construct message for LOG FILE ---
+    # The log file will contain: TIMESTAMP | LEVEL | [TASK_NAME] | RAW_MESSAGE
+    log_level_upper = level.upper()
+    task_prefix = f"[{task_name}] " if task_name else ""
+    log_line_to_file = f"{timestamp} | {log_level_upper} | {task_prefix}{message}" 
 
     # Always write to log file, regardless of console display settings
     log_file_path = get_log_file_path()

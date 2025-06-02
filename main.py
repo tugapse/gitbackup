@@ -1,5 +1,3 @@
-# main.py
-
 import argparse
 import os
 import sys
@@ -48,7 +46,7 @@ def main():
     parser.add_argument(
         '--config-dir',
         default=os.environ.get('GIT_AUTOMATION_CONFIG_DIR', None),
-        help=MESSAGES["cli_config_dir_help_env"].format("~/.config/git_automation_configs (Linux/macOS) or %APPDATA%/git_automation_configs (Windows)")
+        help=MESSAGES["cli_config_dir_help_env"].format("~/.config/git_automation_configs (Linux/macOS) or %%APPDATA%%/git_automation_configs (Windows)")
     )
     parser.add_argument(
         '--output',
@@ -115,7 +113,7 @@ def main():
 
     if args.create:
         if not args.task_identifier:
-            log("❌ Error: --create requires a task identifier (e.g., 'my_task').", level='error')
+            log(MESSAGES["cli_create_requires_task_identifier"], level='error')
             parser.print_help()
             sys.exit(1)
         create_config_file(args)
@@ -135,6 +133,7 @@ def main():
     config_file_path = args.json if args.json else get_config_file_path(args.task_identifier, args.config_dir)
 
     # Read the task configuration
+    # 'task' will now be a SimpleNamespace object
     task = read_config_file(config_file_path)
 
     if task is None:
@@ -142,15 +141,13 @@ def main():
 
     # If --update is specified, run the update workflow
     if args.update:
-        # Corrected: Using direct strings for debug messages
-        log(f"DEBUG: Inside --update block.", level='debug')
-        log(f"DEBUG: args.task_identifier is: {args.task_identifier}", level='debug')
+        log(f"Inside --update block.", level='debug')
+        log(f"args.task_identifier is: {args.task_identifier}", level='debug')
         run_update_task_workflow(args, task, config_file_path) # Call the new update workflow
-        log(f"DEBUG: run_update_task_workflow finished. Exiting.", level='debug')
+        log(f"run_update_task_workflow finished. Exiting.", level='debug')
     else:
         # Default behavior: run the regular task workflow
-        # Corrected: Using direct strings for debug messages
-        log(f"DEBUG: Inside default run block.", level='debug')
+        log(f"Inside default run block.", level='debug')
         run_task_workflow(args, task, config_file_path)
 
 if __name__ == "__main__":
