@@ -4,7 +4,7 @@ import subprocess
 import os
 import shutil
 from types import SimpleNamespace
-from datetime import datetime # Import datetime for timestamp
+from datetime import datetime
 
 from core.logger import log
 from core.messages import MESSAGES
@@ -222,8 +222,12 @@ def run_show_last_commits_workflow(args: SimpleNamespace, task: SimpleNamespace)
     Displays the last N commits from the remote branch of the specified task.
     """
     task_name = task.name
-    repo_path = task.folder
-    branch = task.branch
+    
+    # --- FIX: Prioritize command-line overrides ---
+    repo_path = args.folder if args.folder else task.folder
+    branch = args.branch if args.branch else task.branch
+    origin_url = args.origin if args.origin else task.origin # For consistency
+    # --- END FIX ---
 
     log(MESSAGES["show_last_commits_start"].format(task_name, branch), level='info', task_name=task_name)
 
@@ -232,11 +236,11 @@ def run_show_last_commits_workflow(args: SimpleNamespace, task: SimpleNamespace)
         return
 
     # Ensure remote origin is set if specified
-    if task.origin:
+    if origin_url: # Use origin_url from combined args/task
         stdout_remotes, success_remotes = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
-        if not success_remotes or task.origin not in stdout_remotes:
-            log(MESSAGES["git_adding_remote"].format(task.origin), level='step', task_name=task_name)
-            if not _execute_git_command(['remote', 'add', 'origin', task.origin], cwd=repo_path, task_name=task_name)[1]:
+        if not success_remotes or origin_url not in stdout_remotes:
+            log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
+            if not _execute_git_command(['remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name)[1]:
                 return
 
     commits = _get_remote_commits(repo_path, branch, task_name)
@@ -261,9 +265,12 @@ def run_revert_commit_workflow(args: SimpleNamespace, task: SimpleNamespace):
     Automatically stashes local changes if detected before cherry-picking.
     """
     task_name = task.name
-    repo_path = task.folder
-    branch = task.branch
-    origin_url = task.origin
+    
+    # --- FIX: Prioritize command-line overrides ---
+    repo_path = args.folder if args.folder else task.folder
+    branch = args.branch if args.branch else task.branch
+    origin_url = args.origin if args.origin else task.origin # For consistency
+    # --- END FIX ---
 
     log(MESSAGES["revert_commit_start"].format(task_name), level='info', task_name=task_name)
 
@@ -390,9 +397,11 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
 
     log(MESSAGES["workflow_start"].format(task_name), level='info', task_name=task_name)
     
-    repo_path = task.folder
-    branch = task.branch
-    origin_url = task.origin
+    # --- FIX: Prioritize command-line overrides ---
+    repo_path = args.folder if args.folder else task.folder
+    branch = args.branch if args.branch else task.branch
+    origin_url = args.origin if args.origin else task.origin
+    # --- END FIX ---
 
     # Ensure repository directory exists
     if not os.path.exists(repo_path):
@@ -559,9 +568,11 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
 
     log(MESSAGES["update_workflow_start"].format(task_name), level='info', task_name=task_name)
 
-    repo_path = task.folder
-    branch = task.branch
-    origin_url = task.origin
+    # --- FIX: Prioritize command-line overrides ---
+    repo_path = args.folder if args.folder else task.folder
+    branch = args.branch if args.branch else task.branch
+    origin_url = args.origin if args.origin else task.origin
+    # --- END FIX ---
 
     # Ensure repository directory exists and is a Git repo
     if not os.path.exists(repo_path):
@@ -572,7 +583,7 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
         return False
     
     # Ensure origin is set if it was defined in config
-    if origin_url:
+    if origin_url: # Use origin_url from combined args/task
         log(MESSAGES["git_checking_remote"].format(origin_url), level='debug', task_name=task_name)
         # Check if origin is already set or add it
         stdout_remotes, success_remotes = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
@@ -686,5 +697,12 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
             return False
         log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
 
-    log(MESSAGES["update_workflow_completed"].format(task_name), level='success', task_name=task_name)
+    # Execute post-command
+    if task.post_command:
+        if not _execute_command(task.post_command, cwd=repo_path, task_name=task_name):
+            log(MESSAGES["workflow_post_command_failed"], level='error', task_name=task_name)
+            return False
+        log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
+
+    log(MESSAGES["workflow_completed"].format(task_name), level='success', task_name=task_name)
     return True
