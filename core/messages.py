@@ -30,10 +30,15 @@ MESSAGES = {
     "cli_initialize_help": "Initialize the folder as a Git repository if it's not already one.",
     "cli_list_help": "List all available task configuration files.",
     "cli_update_help": "Run the task in 'update' mode (skips pre/post commands, focuses on pull/commit/push).",
+    "cli_show_last_commits_help": "Display the last 5 commits from the remote branch.", # New
+    "cli_revert_commit_help": "Interactively select a remote commit to apply as a new change (cherry-pick).", # New
 
     # --- CLI Errors (no prefixes) ---
-    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update) can be specified.",
+    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit) can be specified.", # Updated
     "cli_create_requires_task_identifier": "The --create command requires a <task_identifier>.",
+    "cli_edit_requires_task_identifier": "The --edit command requires a <task_identifier>.", # New
+    "cli_show_last_commits_requires_task_identifier": "The --show-last-commits command requires a <task_identifier>.", # New
+    "cli_revert_commit_requires_task_identifier": "The --revert-commit command requires a <task_identifier>.", # New
     "cli_error_no_task_or_json": "Please specify a task identifier or a JSON config file path (--json).",
 
     # --- Config Operations (no prefixes) ---
@@ -128,7 +133,42 @@ MESSAGES = {
     "git_stash_pop_successful": "Stashed changes applied successfully.",
     "git_error_status_check": "Failed to check Git status.",
     "git_pull_failed": "Git pull failed for branch '{}'.",
-    "git_changes_found_stashing": "Local changes detected. Stashing them temporarily...",
+    "git_not_repo_or_not_found": "Repository folder '{}' not found or is not a Git repository.",
+    "git_fetch_failed": "Failed to fetch from remote branch '{}'.",
+    "git_log_failed": "Failed to retrieve commit log for '{}'.",
+    "git_fetching_remote_commits": "Fetching last commits from remote branch '{}'...", 
+    "git_changes_found_stashing": "Local changes detected. Stashing them temporarily with message: '{}'.",
+    # --- Show Last Commits Workflow (no prefixes) ---
+    "show_last_commits_start": "Showing last 5 commits for task '{}' on branch '{}'.",
+    "show_last_commits_no_commits": "No commits found on remote branch '{}'.",
+    "show_last_commits_listing": "Listing last commits on remote branch '{}':",
+    "show_last_commits_completed": "Last commits display completed.",
+
+    # --- Revert Commit (Cherry-Pick) Workflow (no prefixes) ---
+    "revert_commit_start": "Starting interactive cherry-pick for task '{}'.",
+    "revert_error_branch_not_local": "Local branch '{}' not found. Please ensure it exists before attempting to cherry-pick.",
+    "revert_error_dirty_repo": "Local changes detected in your repository. Please commit or stash them before attempting to cherry-pick.", # OLD, will be replaced/used as a warning.
+    "revert_dirty_repo_instructions": "To proceed, run 'git status' to see changes. Then 'git add .', 'git commit -m \"My temporary changes\"' OR 'git stash'.", # OLD, will be removed or altered
+    "revert_auto_stashing_changes": "Local changes detected. Automatically stashing them with message: '{}'.", # New
+    "revert_auto_stash_failed": "Failed to automatically stash local changes. Please resolve manually and try again.", # New
+    "revert_no_local_changes_to_stash": "No local changes detected. Proceeding with cherry-pick.", # New
+    "revert_attempting_pop_after_no_commits": "No commits found to cherry-pick. Attempting to pop stashed changes (if any)...", # New
+    "revert_attempting_pop_after_cancel": "Cherry-pick cancelled. Attempting to pop stashed changes (if any)...", # New
+    "revert_attempting_pop_after_failure": "Cherry-pick or push failed. Attempting to pop stashed changes (if any)...", # New
+    "revert_no_commits_found": "No commits found on remote branch '{}' to cherry-pick from.",
+    "revert_listing_commits": "Last 5 commits on remote branch '{}':",
+    "revert_prompt_selection": "Enter the number of the commit you want to apply as a new change (1-{}) or 0 to cancel: ",
+    "revert_invalid_selection": "Invalid selection. Please enter a number from the list or 0 to cancel.",
+    "revert_invalid_input": "Invalid input. Please enter a number.",
+    "revert_cancelled": "Cherry-pick operation cancelled.",
+    "revert_confirm_cherry_pick": "You are about to apply changes from commit [{}] - '{}' as a NEW commit.",
+    "revert_confirm_proceed": "Confirm this action?",
+    "revert_performing_cherry_pick": "Performing cherry-pick of commit [{}]...",
+    "revert_cherry_pick_failed": "Cherry-pick of commit [{}] failed.",
+    "revert_cherry_pick_conflict_instructions": "Merge conflicts detected! Please resolve them manually:\n  1. Use 'git status' to identify conflicted files.\n  2. Edit files to resolve conflicts.\n  3. Use 'git add <resolved_files>' to stage changes.\n  4. Run 'git cherry-pick --continue' to finish.\n  (To abort: 'git cherry-pick --abort')",
+    "revert_cherry_pick_successful": "Changes from commit [{}] successfully applied as a new commit.",
+    "revert_push_skipped_after_cherry_pick": "Push skipped after cherry-pick (push_after_command is false).",
+    "revert_completed": "Interactive cherry-pick workflow completed for task '{}'.",
 
 
     # --- General Command Execution (no prefixes) ---

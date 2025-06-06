@@ -4,6 +4,7 @@ import subprocess
 import os
 import shutil
 from types import SimpleNamespace
+from datetime import datetime
 
 from core.logger import log
 from core.messages import MESSAGES
@@ -17,7 +18,7 @@ def _check_for_changes(repo_path, task_name):
     stdout, success = _execute_git_command(['status', '--porcelain'], cwd=repo_path, task_name=task_name, log_level='debug')
     if not success:
         log(MESSAGES["git_error_status_check"], level='error', task_name=task_name)
-        return False, True # False for changes, True for error
+        return False, True # False for changes, True for error (an actual error in status check)
     
     if stdout.strip(): # If stdout is not empty, there are changes
         log(MESSAGES["git_changes_detected_status_check"], level='debug', task_name=task_name)
@@ -26,20 +27,22 @@ def _check_for_changes(repo_path, task_name):
         log(MESSAGES["git_no_changes_detected_status_check"], level='debug', task_name=task_name)
         return False, False # False for changes, False for no error
 
-def _stash_local_changes(repo_path, task_name):
-    """Stashes local changes including untracked files."""
-    log(MESSAGES["git_changes_found_stashing"], level='normal', task_name=task_name)
-    # Using --include-untracked to stash new files too
-    # Git stash returns 0 on success, even if nothing is stashed (prints "No local changes to save")
-    # Our _execute_git_command uses check=True, so it will raise CalledProcessError if there's an actual error.
-    stdout_raw, success = _execute_git_command(['stash', 'push', '--include-untracked', '-m', 'git-automation-temp-stash'], cwd=repo_path, task_name=task_name)
+def _stash_local_changes(repo_path, task_name, custom_message=None):
+    """
+    Stashes local changes including untracked files.
+    This function should only log its own execution and outcome, not decision messages.
+    """
+    stash_message = custom_message if custom_message else "git-automation-temp-stash"
+    log(f"Stashing local changes with message: '{stash_message}'...", level='debug', task_name=task_name) # Debug log for internal action
+    
+    stdout_raw, success = _execute_git_command(['stash', 'push', '--include-untracked', '-m', stash_message], cwd=repo_path, task_name=task_name)
 
     if not success:
-        # If _execute_git_command returned False, it's a real failure
         log(MESSAGES["git_stash_failed"].format("Failed to save stash."), level='error', task_name=task_name)
         return False
     
-    # If success is True, it means stash command ran successfully (either stashed or nothing to stash)
+    # Only log success/failure here for the operation itself
+    # The higher-level workflow logs the decision to stash
     log(MESSAGES["git_stash_successful"], level='success', task_name=task_name)
     return True
 
@@ -119,6 +122,267 @@ def _execute_git_command(command_parts, cwd, task_name, log_level='info'):
     except Exception as e:
         log(MESSAGES["git_command_exception"].format(cmd_str, e), level='error', task_name=task_name)
         return None, False
+
+def _execute_command(command_line, cwd, task_name):
+    """Executes a general shell command."""
+    if not command_line:
+        return True # No command to execute
+
+    log(MESSAGES["cmd_executing"].format(command_line), level='step', task_name=task_name)
+    try:
+        # Using shell=True to allow complex commands and piping, but beware of shell injection
+        result = subprocess.run(
+            command_line,
+            cwd=cwd,
+            shell=True,
+            check=True,
+            capture_output=True,
+            text=True,
+            encoding='utf-8'
+        )
+        if result.stdout:
+            for line in result.stdout.strip().splitlines():
+                log(f"  {line}", level='debug', task_name=task_name)
+        if result.stderr:
+            for line in result.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='warning', task_name=task_name)
+        log(MESSAGES["cmd_finished_successfully"], level='success', task_name=task_name)
+        return True
+    except subprocess.CalledProcessError as e:
+        log(MESSAGES["cmd_failed_exit_code"].format(command_line, e.returncode), level='error', task_name=task_name)
+        if e.stdout:
+            for line in e.stdout.strip().splitlines():
+                log(f"  OUT: {line}", level='error', task_name=task_name)
+        if e.stderr:
+            for line in e.stderr.strip().splitlines():
+                log(f"  ERR: {line}", level='error', task_name=task_name)
+        return False
+    except FileNotFoundError:
+        log(MESSAGES["cmd_not_found"].format(command_line.split()[0]), level='error', task_name=task_name)
+        return False
+    except Exception as e:
+        log(MESSAGES["cmd_exception"].format(command_line, e), level='error', task_name=task_name)
+        return False
+
+# --- New Helper for User Confirmation ---
+def _prompt_for_confirmation(prompt_message, task_name=""):
+    """
+    Prompts the user for a 'yes' or 'no' confirmation.
+    Returns True if 'yes', False otherwise.
+    """
+    log(prompt_message, level='warning', task_name=task_name)
+    while True:
+        try:
+            response = input("  Type 'yes' to confirm, or anything else to cancel: ").strip().lower()
+            if response == 'yes':
+                return True
+            else:
+                log("Operation cancelled by user.", level='info', task_name=task_name)
+                return False
+        except KeyboardInterrupt:
+            log("\nOperation cancelled by user (Ctrl+C).", level='info', task_name=task_name)
+            return False
+
+# --- New Helper for Getting Remote Commits ---
+def _get_remote_commits(repo_path, branch, task_name, num_commits=5):
+    """
+    Fetches the last N commits from the remote branch and returns them.
+    Returns a list of dictionaries with (full_hash, short_hash, message, author, date) or None on failure.
+    """
+    log(MESSAGES["git_fetching_remote_commits"].format(branch), level='step', task_name=task_name)
+    
+    # First, ensure we have the latest remote history
+    if not _execute_git_command(['fetch', 'origin', branch], cwd=repo_path, task_name=task_name)[1]:
+        log(MESSAGES["git_fetch_failed"].format(branch), level='error', task_name=task_name)
+        return None
+
+    # Use --pretty=format for controlled output: full_hash, short_hash, subject, author, date
+    # %H: full hash, %h: abbreviated hash, %s: subject, %an: author name, %ad: author date
+    # --date=format:'%Y-%m-%d %H:%M': specifies date format
+    log_format = "%H%x09%h%x09%s%x09%an%x09%ad"
+    stdout, success = _execute_git_command(['log', f'origin/{branch}', f'-n{num_commits}', f'--pretty=format:{log_format}', '--date=format:%Y-%m-%d %H:%M'], cwd=repo_path, task_name=task_name)
+
+    if not success:
+        log(MESSAGES["git_log_failed"].format(f'origin/{branch}'), level='error', task_name=task_name)
+        return None
+
+    commits_data = []
+    for line in stdout.splitlines():
+        # Split by tab, expecting 5 parts
+        parts = line.split('\t', 4) 
+        if len(parts) == 5:
+            full_hash, short_hash, message, author, date = parts
+            commits_data.append({'full_hash': full_hash, 'short_hash': short_hash, 'message': message, 'author': author, 'date': date})
+    
+    return commits_data
+
+# --- Workflow for Showing Last Commits ---
+def run_show_last_commits_workflow(args: SimpleNamespace, task: SimpleNamespace):
+    """
+    Displays the last N commits from the remote branch of the specified task.
+    """
+    task_name = task.name
+    repo_path = task.folder
+    branch = task.branch
+
+    log(MESSAGES["show_last_commits_start"].format(task_name, branch), level='info', task_name=task_name)
+
+    if not os.path.exists(repo_path) or not _is_git_repo(repo_path):
+        log(MESSAGES["git_not_repo_or_not_found"].format(repo_path), level='error', task_name=task_name)
+        return
+
+    # Ensure remote origin is set if specified
+    if task.origin:
+        stdout_remotes, success_remotes = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
+        if not success_remotes or task.origin not in stdout_remotes:
+            log(MESSAGES["git_adding_remote"].format(task.origin), level='step', task_name=task_name)
+            if not _execute_git_command(['remote', 'add', 'origin', task.origin], cwd=repo_path, task_name=task_name)[1]:
+                return
+
+    commits = _get_remote_commits(repo_path, branch, task_name)
+    if commits is None:
+        return # Error already logged
+
+    if not commits:
+        log(MESSAGES["show_last_commits_no_commits"].format(branch), level='info', task_name=task_name)
+        return
+
+    log(MESSAGES["show_last_commits_listing"].format(branch), level='normal', task_name=task_name)
+    for i, commit in enumerate(commits):
+        log(f"{i + 1}. [{commit['short_hash']}] {commit['message']} ({commit['author']}, {commit['date']})", level='normal', task_name=task_name)
+
+    log(MESSAGES["show_last_commits_completed"], level='success', task_name=task_name)
+
+
+# --- Workflow for Interactive Revert (Cherry-Pick) with Automatic Stash ---
+def run_revert_commit_workflow(args: SimpleNamespace, task: SimpleNamespace):
+    """
+    Allows interactive selection of a remote commit to cherry-pick.
+    Automatically stashes local changes if detected before cherry-picking.
+    """
+    task_name = task.name
+    repo_path = task.folder
+    branch = task.branch
+    origin_url = task.origin
+
+    log(MESSAGES["revert_commit_start"].format(task_name), level='info', task_name=task_name)
+
+    # Initial safety checks
+    if not os.path.exists(repo_path) or not _is_git_repo(repo_path):
+        log(MESSAGES["git_not_repo_or_not_found"].format(repo_path), level='error', task_name=task_name)
+        return False
+
+    # Ensure branch is checked out
+    log(MESSAGES["git_checking_out_branch"].format(branch), level='step', task_name=task_name)
+    _, local_branch_exists = _execute_git_command(['rev-parse', '--verify', branch], cwd=repo_path, task_name=task_name, log_level='debug')
+    if not local_branch_exists:
+        log(MESSAGES["revert_error_branch_not_local"].format(branch), level='error', task_name=task_name)
+        return False
+    if not _execute_git_command(['checkout', branch], cwd=repo_path, task_name=task_name)[1]:
+        log(MESSAGES["git_branch_checkout_failed"].format(branch), level='error', task_name=task_name)
+        return False
+    log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
+
+    # --- START NEW STASH LOGIC FOR REVERT WORKFLOW ---
+    has_local_changes, check_error = _check_for_changes(repo_path, task_name)
+    if check_error: return False # Error checking changes
+
+    stashed = False
+    if has_local_changes:
+        stash_message = f"git-automation-cherry-pick-temp-stash-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        log(MESSAGES["revert_auto_stashing_changes"].format(stash_message), level='warning', task_name=task_name)
+        if not _stash_local_changes(repo_path, task_name, custom_message=stash_message):
+            log(MESSAGES["revert_auto_stash_failed"], level='error', task_name=task_name)
+            return False
+        stashed = True
+    else:
+        log(MESSAGES["revert_no_local_changes_to_stash"], level='info', task_name=task_name)
+    # --- END NEW STASH LOGIC FOR REVERT WORKFLOW ---
+
+    # Fetch commits
+    commits = _get_remote_commits(repo_path, branch, task_name, num_commits=5)
+    if commits is None or not commits:
+        log(MESSAGES["revert_no_commits_found"].format(branch), level='error', task_name=task_name)
+        if stashed: # Attempt to pop stash even if no commits found for cherry-pick
+            log(MESSAGES["revert_attempting_pop_after_no_commits"], level='warning', task_name=task_name)
+            _pop_stashed_changes(repo_path, task_name)
+        return False
+
+    log(MESSAGES["revert_listing_commits"].format(branch), level='normal', task_name=task_name)
+    for i, commit in enumerate(commits):
+        log(f"{i + 1}. [{commit['short_hash']}] {commit['message']} ({commit['author']}, {commit['date']})", level='normal', task_name=task_name)
+
+    selected_index = -1
+    while not (0 <= selected_index <= len(commits)):
+        try:
+            user_input = input(MESSAGES["revert_prompt_selection"].format(len(commits))).strip()
+            selected_index = int(user_input) - 1 # Adjust for 0-based indexing
+            if selected_index == -1 and user_input == '0': # User wants to cancel
+                log(MESSAGES["revert_cancelled"], level='info', task_name=task_name)
+                if stashed:
+                    log(MESSAGES["revert_attempting_pop_after_cancel"], level='warning', task_name=task_name)
+                    _pop_stashed_changes(repo_path, task_name)
+                return False
+            if not (0 <= selected_index < len(commits)): # Check boundary again
+                log(MESSAGES["revert_invalid_selection"], level='error', task_name=task_name)
+                selected_index = -1 # Reset to loop again
+        except ValueError:
+            log(MESSAGES["revert_invalid_input"], level='error', task_name=task_name)
+            selected_index = -1 # Reset to loop again
+        except KeyboardInterrupt:
+            log("\n" + MESSAGES["revert_cancelled"], level='info', task_name=task_name)
+            if stashed:
+                log(MESSAGES["revert_attempting_pop_after_cancel"], level='warning', task_name=task_name)
+                _pop_stashed_changes(repo_path, task_name)
+            return False
+
+    selected_commit = commits[selected_index]
+
+    log(MESSAGES["revert_confirm_cherry_pick"].format(selected_commit['short_hash'], selected_commit['message']), level='warning', task_name=task_name)
+    if not _prompt_for_confirmation(MESSAGES["revert_confirm_proceed"], task_name=task_name):
+        if stashed:
+            log(MESSAGES["revert_attempting_pop_after_cancel"], level='warning', task_name=task_name)
+            _pop_stashed_changes(repo_path, task_name)
+        return False
+
+    # Perform cherry-pick
+    log(MESSAGES["revert_performing_cherry_pick"].format(selected_commit['short_hash']), level='step', task_name=task_name)
+    if not _execute_git_command(['cherry-pick', selected_commit['full_hash'], '--no-edit'], cwd=repo_path, task_name=task_name)[1]:
+        log(MESSAGES["revert_cherry_pick_failed"].format(selected_commit['short_hash']), level='error', task_name=task_name)
+        log(MESSAGES["revert_cherry_pick_conflict_instructions"], level='error', task_name=task_name)
+        if stashed:
+            log(MESSAGES["revert_attempting_pop_after_failure"], level='warning', task_name=task_name)
+            _pop_stashed_changes(repo_path, task_name) # Attempt pop even on cherry-pick failure
+        return False
+    
+    log(MESSAGES["revert_cherry_pick_successful"].format(selected_commit['short_hash']), level='success', task_name=task_name)
+
+    # Automatic Push after successful cherry-pick
+    if task.push_after_command:
+        log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
+        if not _execute_git_command(['push', 'origin', branch], cwd=repo_path, task_name=task_name)[1]:
+            log(MESSAGES["git_push_failed"].format(branch), level='error', task_name=task_name)
+            if stashed: # Attempt pop even if push fails
+                log(MESSAGES["revert_attempting_pop_after_failure"], level='warning', task_name=task_name)
+                _pop_stashed_changes(repo_path, task_name)
+            return False # Consider push failure after cherry-pick a workflow failure
+        log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
+    else:
+        log(MESSAGES["revert_push_skipped_after_cherry_pick"], level='info', task_name=task_name)
+
+    # Pop stashed changes if they were stashed
+    if stashed:
+        if not _pop_stashed_changes(repo_path, task_name):
+            log(MESSAGES["workflow_pop_stash_failed_after_pull_warning"], level='warning', task_name=task_name)
+            log(MESSAGES["workflow_manual_resolve_needed"], level='error', task_name=task_name)
+            # Do NOT return False here, as the cherry-pick itself was successful.
+            # This is a post-operation warning for manual user intervention.
+
+    log(MESSAGES["revert_completed"].format(task_name), level='success', task_name=task_name)
+    return True
+
+
+# Existing run_task_workflow and run_update_task_workflow (no changes needed)
 
 def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_path: str):
     """
