@@ -30,15 +30,15 @@ MESSAGES = {
     "cli_initialize_help": "Initialize the folder as a Git repository if it's not already one.",
     "cli_list_help": "List all available task configuration files.",
     "cli_update_help": "Run the task in 'update' mode (skips pre/post commands, focuses on pull/commit/push).",
-    "cli_show_last_commits_help": "Display the last 5 commits from the remote branch.", # New
-    "cli_revert_commit_help": "Interactively select a remote commit to apply as a new change (cherry-pick).", # New
+    "cli_show_last_commits_help": "Display the last 5 commits from the remote branch.",
+    "cli_revert_commit_help": "Interactively select a remote commit to apply as a new change (cherry-pick).",
 
     # --- CLI Errors (no prefixes) ---
-    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit) can be specified.", # Updated
+    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit) can be specified.",
     "cli_create_requires_task_identifier": "The --create command requires a <task_identifier>.",
-    "cli_edit_requires_task_identifier": "The --edit command requires a <task_identifier>.", # New
-    "cli_show_last_commits_requires_task_identifier": "The --show-last-commits command requires a <task_identifier>.", # New
-    "cli_revert_commit_requires_task_identifier": "The --revert-commit command requires a <task_identifier>.", # New
+    "cli_edit_requires_task_identifier": "The --edit command requires a <task_identifier>.",
+    "cli_show_last_commits_requires_task_identifier": "The --show-last-commits command requires a <task_identifier>.",
+    "cli_revert_commit_requires_task_identifier": "The --revert-commit command requires a <task_identifier>.",
     "cli_error_no_task_or_json": "Please specify a task identifier or a JSON config file path (--json).",
 
     # --- Config Operations (no prefixes) ---
@@ -137,7 +137,7 @@ MESSAGES = {
     "git_fetch_failed": "Failed to fetch from remote branch '{}'.",
     "git_log_failed": "Failed to retrieve commit log for '{}'.",
     "git_fetching_remote_commits": "Fetching last commits from remote branch '{}'...", 
-    "git_changes_found_stashing": "Local changes detected. Stashing them temporarily with message: '{}'.",
+
     # --- Show Last Commits Workflow (no prefixes) ---
     "show_last_commits_start": "Showing last 5 commits for task '{}' on branch '{}'.",
     "show_last_commits_no_commits": "No commits found on remote branch '{}'.",
@@ -147,9 +147,9 @@ MESSAGES = {
     # --- Revert Commit (Cherry-Pick) Workflow (no prefixes) ---
     "revert_commit_start": "Starting interactive cherry-pick for task '{}'.",
     "revert_error_branch_not_local": "Local branch '{}' not found. Please ensure it exists before attempting to cherry-pick.",
-    "revert_error_dirty_repo": "Local changes detected in your repository. Please commit or stash them before attempting to cherry-pick.", # OLD, will be replaced/used as a warning.
-    "revert_dirty_repo_instructions": "To proceed, run 'git status' to see changes. Then 'git add .', 'git commit -m \"My temporary changes\"' OR 'git stash'.", # OLD, will be removed or altered
-    "revert_auto_stashing_changes": "Local changes detected. Automatically stashing them with message: '{}'.", # New
+    # "revert_error_dirty_repo": "Local changes detected in your repository. Please commit or stash them before attempting to cherry-pick.", # Removed
+    # "revert_dirty_repo_instructions": "To proceed, run 'git status' to see changes. Then 'git add .', 'git commit -m \"My temporary changes\"' OR 'git stash'.", # Removed
+    "revert_auto_stashing_changes": "Local changes detected. Automatically stashing them with message: '{}'.", # Updated
     "revert_auto_stash_failed": "Failed to automatically stash local changes. Please resolve manually and try again.", # New
     "revert_no_local_changes_to_stash": "No local changes detected. Proceeding with cherry-pick.", # New
     "revert_attempting_pop_after_no_commits": "No commits found to cherry-pick. Attempting to pop stashed changes (if any)...", # New

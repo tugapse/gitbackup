@@ -4,7 +4,7 @@ import subprocess
 import os
 import shutil
 from types import SimpleNamespace
-from datetime import datetime
+from datetime import datetime # Import datetime for timestamp
 
 from core.logger import log
 from core.messages import MESSAGES
@@ -164,7 +164,7 @@ def _execute_command(command_line, cwd, task_name):
         log(MESSAGES["cmd_exception"].format(command_line, e), level='error', task_name=task_name)
         return False
 
-# --- New Helper for User Confirmation ---
+# --- Helper for User Confirmation ---
 def _prompt_for_confirmation(prompt_message, task_name=""):
     """
     Prompts the user for a 'yes' or 'no' confirmation.
@@ -183,7 +183,7 @@ def _prompt_for_confirmation(prompt_message, task_name=""):
             log("\nOperation cancelled by user (Ctrl+C).", level='info', task_name=task_name)
             return False
 
-# --- New Helper for Getting Remote Commits ---
+# --- Helper for Getting Remote Commits ---
 def _get_remote_commits(repo_path, branch, task_name, num_commits=5):
     """
     Fetches the last N commits from the remote branch and returns them.
@@ -198,9 +198,9 @@ def _get_remote_commits(repo_path, branch, task_name, num_commits=5):
 
     # Use --pretty=format for controlled output: full_hash, short_hash, subject, author, date
     # %H: full hash, %h: abbreviated hash, %s: subject, %an: author name, %ad: author date
-    # --date=format:'%Y-%m-%d %H:%M': specifies date format
+    # --date=format:'%Y-%m-%d %H:%M:%S': specifies date format
     log_format = "%H%x09%h%x09%s%x09%an%x09%ad"
-    stdout, success = _execute_git_command(['log', f'origin/{branch}', f'-n{num_commits}', f'--pretty=format:{log_format}', '--date=format:%Y-%m-%d %H:%M'], cwd=repo_path, task_name=task_name)
+    stdout, success = _execute_git_command(['log', f'origin/{branch}', f'-n{num_commits}', f'--pretty=format:{log_format}', '--date=format:%Y-%m-%d %H:%M:%S'], cwd=repo_path, task_name=task_name)
 
     if not success:
         log(MESSAGES["git_log_failed"].format(f'origin/{branch}'), level='error', task_name=task_name)
@@ -382,8 +382,6 @@ def run_revert_commit_workflow(args: SimpleNamespace, task: SimpleNamespace):
     return True
 
 
-# Existing run_task_workflow and run_update_task_workflow (no changes needed)
-
 def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_path: str):
     """
     Executes the full Git automation workflow for a given task.
@@ -521,12 +519,18 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
     log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
 
     log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
+    
+    # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
+    final_commit_message = task.commit_message
+    if task.timestamp_format:
+        timestamp_str = datetime.now().strftime(task.timestamp_format)
+        final_commit_message = f"{task.commit_message} [{timestamp_str}]"
+    # --- END CONSTRUCT COMMIT MESSAGE ---
+
     # _execute_git_command handles "no changes to commit" gracefully as a success
-    if not _execute_git_command(['commit', '-m', task.commit_message], cwd=repo_path, task_name=task_name)[1]:
+    if not _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)[1]:
         # If it returns False here, it means it was a genuine commit error
         return False
-    # If it returned True, either a commit was made, or there were no changes
-    # No explicit log for 'changes committed' here as _execute_git_command now logs "no changes"
         
     # Push changes if configured
     if task.push_after_command:
@@ -664,9 +668,15 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
     log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
 
     log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
-    # _execute_git_command handles "no changes to commit" gracefully as a success
-    if not _execute_git_command(['commit', '-m', task.commit_message], cwd=repo_path, task_name=task_name)[1]:
-        # If it returns False here, it means it was a genuine commit error
+    
+    # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
+    final_commit_message = task.commit_message
+    if task.timestamp_format:
+        timestamp_str = datetime.now().strftime(task.timestamp_format)
+        final_commit_message = f"{task.commit_message} [{timestamp_str}]"
+    # --- END CONSTRUCT COMMIT MESSAGE ---
+
+    if not _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)[1]:
         return False
     
     # Push changes if configured
