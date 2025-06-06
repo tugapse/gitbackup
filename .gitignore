@@ -5,3 +5,5 @@ dist/*
 build/*
 GitAutomator.spec
 *.code-workspace
+*/__pycache__/
+*/__pycache__/*

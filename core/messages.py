@@ -1,3 +1,5 @@
+# core/messages.py
+
 MESSAGES = {
     # --- CLI Descriptions and Help ---
     "cli_description": "Git Automation CLI: Automates common Git tasks like pulling, committing, and pushing.\n\n"
@@ -28,13 +30,18 @@ MESSAGES = {
     "cli_initialize_help": "Initialize the folder as a Git repository if it's not already one.",
     "cli_list_help": "List all available task configuration files.",
     "cli_update_help": "Run the task in 'update' mode (skips pre/post commands, focuses on pull/commit/push).",
+    "cli_show_last_commits_help": "Display the last 5 commits from the remote branch.",
+    "cli_revert_commit_help": "Interactively select a remote commit to apply as a new change (cherry-pick).",
 
-    # --- CLI Errors ---
-    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update) can be specified.",
+    # --- CLI Errors (no prefixes) ---
+    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit) can be specified.",
     "cli_create_requires_task_identifier": "The --create command requires a <task_identifier>.",
+    "cli_edit_requires_task_identifier": "The --edit command requires a <task_identifier>.",
+    "cli_show_last_commits_requires_task_identifier": "The --show-last-commits command requires a <task_identifier>.",
+    "cli_revert_commit_requires_task_identifier": "The --revert-commit command requires a <task_identifier>.",
     "cli_error_no_task_or_json": "Please specify a task identifier or a JSON config file path (--json).",
 
-    # --- Config Operations ---
+    # --- Config Operations (no prefixes) ---
     "config_warning_unknown_os": "Could not determine standard config directory for this OS. Using current working directory for configs.",
     "config_error_no_config_dir": "Configuration directory path is not defined.",
     "config_error_file_exists": "Configuration file already exists at {}. Use --overwrite to force overwrite.",
@@ -56,7 +63,7 @@ MESSAGES = {
     "config_error_invalid_json": "Invalid JSON in configuration file {}: {}",
     "config_error_reading_file": "An error occurred while reading configuration file {}: {}",
 
-    # --- Workflow Logic ---
+    # --- Workflow Logic (no prefixes) ---
     "workflow_start": "Starting workflow for task '{}'.",
     "workflow_creating_folder": "Creating repository folder: {}",
     "workflow_folder_created": "Folder created.",
@@ -69,27 +76,41 @@ MESSAGES = {
     "workflow_post_command_successful": "Post-command completed.",
     "workflow_completed": "Workflow completed for task '{}'.",
     "workflow_task_failed_loading": "Task configuration could not be loaded or was invalid.",
+    "workflow_local_changes_found_stashing": "Local changes detected. Stashing them temporarily...",
+    "workflow_stash_failed_before_pull": "Failed to stash local changes before pull.",
+    "workflow_no_local_changes_to_stash": "No local changes detected to stash.",
+    "workflow_pull_failed_attempting_pop": "Git pull failed, attempting to pop stashed changes...",
+    "workflow_pop_stash_failed_after_pull_warning": "Failed to pop stashed changes. There might be conflicts.",
+    "workflow_manual_resolve_needed": "Manual intervention required to resolve conflicts or unstage changes.",
+    "workflow_pull_before_command_skipped": "Skipping Git pull before command (pull_before_command is false).",
     
-    # --- Update Workflow Specific ---
+    # --- Update Workflow Specific (no prefixes) ---
     "update_workflow_start": "Starting update workflow for task '{}'.",
     "update_workflow_completed": "Update workflow completed for task '{}'.",
     "update_error_folder_not_found": "Repository folder '{}' not found for update. Please run a full task workflow first or manually create it.",
     "update_error_not_git_repo": "Folder '{}' is not a Git repository. Cannot perform update. Run a full task workflow with --initialize.",
+    "update_skipping_pre_post_commands": "Skipping pre and post commands in update workflow.",
 
-    # --- Git Commands ---
-    "git_executing_command": "Executing Git command: {}", # This will be DEBUG level, so not printed by default
+    # --- Git Commands (no prefixes) ---
+    "git_executing_command": "Executing Git command: {}",
     "git_command_failed": "Git command '{}' failed with exit code {}.",
     "git_command_exception": "An exception occurred during Git command '{}': {}",
     "git_not_found": "Git command not found. Please ensure Git is installed and in your PATH.",
     "git_initializing_repo": "Initializing Git repository in '{}'.",
     "git_repo_initialized": "Git repository initialized.",
     "git_adding_remote": "Adding remote origin: {}",
-    "git_checking_remote": "Checking remote origin status for: {}", # This will be DEBUG level
+    "git_checking_remote": "Checking remote origin status for: {}",
     "git_checking_out_branch": "Checking out branch '{}'.",
     "git_on_branch": "On branch '{}'.",
     "git_branch_checkout_failed": "Failed to checkout branch '{}'.",
     "git_branch_checkout_failed_try_create": "Failed to checkout branch '{}'. Attempting to create it.",
     "git_branch_creation_failed": "Failed to create and checkout branch '{}'.",
+    "git_branch_not_found_local_or_remote": "Branch '{}' not found locally or on remote. Creating new branch.",
+    "git_pushing_new_branch": "Pushing new branch '{}' to '{}' as '{}' to set upstream...",
+    "git_push_new_branch_failed_warning": "Failed to push new branch '{}' to '{}' as '{}'. You may need to set upstream manually.",
+    "git_branch_found_remote": "Branch '{}' found on remote '{}'.",
+    "git_branch_found_local": "Branch '{}' found locally.",
+    "git_branch_not_found_local": "Branch '{}' not found locally.",
     "git_not_repo_and_not_init": "Folder '{}' is not a Git repository and --initialize was not specified. Cannot proceed.",
     "git_pulling_latest": "Pulling latest changes...",
     "git_pull_successful": "Git pull successful.",
@@ -100,8 +121,57 @@ MESSAGES = {
     "git_no_changes_to_commit": "No changes to commit.",
     "git_pushing_changes": "Pushing changes to remote branch '{}'...",
     "git_push_successful": "Git push successful.",
+    "git_checking_status": "Checking Git status for changes...",
+    "git_changes_detected_status_check": "Local changes detected.",
+    "git_no_changes_detected_status_check": "No local changes detected.",
+    "git_stash_failed": "Git stash failed: {}",
+    "git_stash_successful": "Local changes stashed successfully.",
+    "git_stash_pop_applying": "Applying stashed changes...",
+    "git_stash_pop_no_stash": "No stash entries found to pop.",
+    "git_stash_pop_failed_conflict": "Failed to pop stash due to merge conflict. Manual resolution needed.",
+    "git_stash_pop_failed_general": "Failed to pop stash: {}",
+    "git_stash_pop_successful": "Stashed changes applied successfully.",
+    "git_error_status_check": "Failed to check Git status.",
+    "git_pull_failed": "Git pull failed for branch '{}'.",
+    "git_not_repo_or_not_found": "Repository folder '{}' not found or is not a Git repository.",
+    "git_fetch_failed": "Failed to fetch from remote branch '{}'.",
+    "git_log_failed": "Failed to retrieve commit log for '{}'.",
+    "git_fetching_remote_commits": "Fetching last commits from remote branch '{}'...", 
 
-    # --- General Command Execution ---
+    # --- Show Last Commits Workflow (no prefixes) ---
+    "show_last_commits_start": "Showing last 5 commits for task '{}' on branch '{}'.",
+    "show_last_commits_no_commits": "No commits found on remote branch '{}'.",
+    "show_last_commits_listing": "Listing last commits on remote branch '{}':",
+    "show_last_commits_completed": "Last commits display completed.",
+
+    # --- Revert Commit (Cherry-Pick) Workflow (no prefixes) ---
+    "revert_commit_start": "Starting interactive cherry-pick for task '{}'.",
+    "revert_error_branch_not_local": "Local branch '{}' not found. Please ensure it exists before attempting to cherry-pick.",
+    # "revert_error_dirty_repo": "Local changes detected in your repository. Please commit or stash them before attempting to cherry-pick.", # Removed
+    # "revert_dirty_repo_instructions": "To proceed, run 'git status' to see changes. Then 'git add .', 'git commit -m \"My temporary changes\"' OR 'git stash'.", # Removed
+    "revert_auto_stashing_changes": "Local changes detected. Automatically stashing them with message: '{}'.", # Updated
+    "revert_auto_stash_failed": "Failed to automatically stash local changes. Please resolve manually and try again.", # New
+    "revert_no_local_changes_to_stash": "No local changes detected. Proceeding with cherry-pick.", # New
+    "revert_attempting_pop_after_no_commits": "No commits found to cherry-pick. Attempting to pop stashed changes (if any)...", # New
+    "revert_attempting_pop_after_cancel": "Cherry-pick cancelled. Attempting to pop stashed changes (if any)...", # New
+    "revert_attempting_pop_after_failure": "Cherry-pick or push failed. Attempting to pop stashed changes (if any)...", # New
+    "revert_no_commits_found": "No commits found on remote branch '{}' to cherry-pick from.",
+    "revert_listing_commits": "Last 5 commits on remote branch '{}':",
+    "revert_prompt_selection": "Enter the number of the commit you want to apply as a new change (1-{}) or 0 to cancel: ",
+    "revert_invalid_selection": "Invalid selection. Please enter a number from the list or 0 to cancel.",
+    "revert_invalid_input": "Invalid input. Please enter a number.",
+    "revert_cancelled": "Cherry-pick operation cancelled.",
+    "revert_confirm_cherry_pick": "You are about to apply changes from commit [{}] - '{}' as a NEW commit.",
+    "revert_confirm_proceed": "Confirm this action?",
+    "revert_performing_cherry_pick": "Performing cherry-pick of commit [{}]...",
+    "revert_cherry_pick_failed": "Cherry-pick of commit [{}] failed.",
+    "revert_cherry_pick_conflict_instructions": "Merge conflicts detected! Please resolve them manually:\n  1. Use 'git status' to identify conflicted files.\n  2. Edit files to resolve conflicts.\n  3. Use 'git add <resolved_files>' to stage changes.\n  4. Run 'git cherry-pick --continue' to finish.\n  (To abort: 'git cherry-pick --abort')",
+    "revert_cherry_pick_successful": "Changes from commit [{}] successfully applied as a new commit.",
+    "revert_push_skipped_after_cherry_pick": "Push skipped after cherry-pick (push_after_command is false).",
+    "revert_completed": "Interactive cherry-pick workflow completed for task '{}'.",
+
+
+    # --- General Command Execution (no prefixes) ---
     "cmd_executing": "Executing command: '{}'",
     "cmd_finished_successfully": "Command finished successfully.",
     "cmd_failed_exit_code": "Command '{}' failed with exit code {}.",
