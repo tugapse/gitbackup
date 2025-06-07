@@ -32,15 +32,15 @@ MESSAGES = {
     "cli_update_help": "Run the task in 'update' mode (skips pre/post commands, focuses on pull/commit/push).",
     "cli_show_last_commits_help": "Display the last 5 commits from the remote branch.",
     "cli_revert_commit_help": "Interactively select a remote commit to apply as a new change (cherry-pick).",
-    "cli_pull_help": "Perform a pull-only operation (fetches and merges, skips commit/push/pre/post commands).", # NEW
+    "cli_pull_help": "Perform a pull-only operation (fetches and merges, skips commit/push/pre/post commands).",
     
     # --- CLI Errors (no prefixes) ---
-    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit, --pull) can be specified.", # UPDATED
+    "cli_error_mutually_exclusive_commands": "Only one command (--create, --edit, --list, --update, --show-last-commits, --revert-commit, --pull) can be specified.",
     "cli_create_requires_task_identifier": "The --create command requires a <task_identifier>.",
     "cli_edit_requires_task_identifier": "The --edit command requires a <task_identifier>.",
     "cli_show_last_commits_requires_task_identifier": "The --show-last-commits command requires a <task_identifier>.",
     "cli_revert_commit_requires_task_identifier": "The --revert-commit command requires a <task_identifier>.",
-    "cli_pull_requires_task_identifier": "The --pull command requires a <task_identifier>.", # NEW
+    "cli_pull_requires_task_identifier": "The --pull command requires a <task_identifier>.",
     "cli_error_no_task_or_json": "Please specify a task identifier or a JSON config file path (--json).",
 
     # --- Config Operations (no prefixes) ---
@@ -119,7 +119,7 @@ MESSAGES = {
     "git_adding_changes": "Adding all changes to staging...",
     "git_changes_added": "Changes added to staging.",
     "git_committing_changes": "Committing changes...",
-    "git_changes_committed": "Changes committed.",
+    "git_changes_committed": "Changes committed.", # Modified message: Now implies a commit was actually made
     "git_no_changes_to_commit": "No changes to commit.",
     "git_pushing_changes": "Pushing changes to remote branch '{}'...",
     "git_push_successful": "Git push successful.",
@@ -139,6 +139,7 @@ MESSAGES = {
     "git_fetch_failed": "Failed to fetch from remote branch '{}'.",
     "git_log_failed": "Failed to retrieve commit log for '{}'.",
     "git_fetching_remote_commits": "Fetching last commits from remote branch '{}'...", 
+    "git_push_skipped_no_new_commit": "Push skipped: No new commits were made.", # NEW
 
     # --- Show Last Commits Workflow (no prefixes) ---
     "show_last_commits_start": "Showing last 5 commits for task '{}' on branch '{}'.",
@@ -171,8 +172,8 @@ MESSAGES = {
     "revert_completed": "Interactive cherry-pick workflow completed for task '{}'.",
 
     # --- New Pull Workflow (no prefixes) ---
-    "pull_workflow_start": "Starting pull-only workflow for task '{}'.", # NEW
-    "pull_workflow_completed": "Pull-only workflow completed for task '{}'.", # NEW
+    "pull_workflow_start": "Starting pull-only workflow for task '{}'.",
+    "pull_workflow_completed": "Pull-only workflow completed for task '{}'.",
 
     # --- General Command Execution (no prefixes) ---
     "cmd_executing": "Executing command: '{}'",
