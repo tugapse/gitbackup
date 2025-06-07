@@ -519,15 +519,18 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
         
     log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
 
+    # Flag to track if the repo is clean after pull (and potential stash pop)
+    repo_clean_after_pull = False 
+
     # Pull latest changes if configured
     if task.pull_before_command:
         log(MESSAGES["git_pulling_latest"], level='step', task_name=task_name)
         
-        has_local_changes, check_error = _check_for_changes(repo_path, task_name)
+        has_local_changes_before_pull, check_error = _check_for_changes(repo_path, task_name)
         if check_error: return False
         
         stashed = False
-        if has_local_changes:
+        if has_local_changes_before_pull:
             log(MESSAGES["workflow_local_changes_found_stashing"], level='info', task_name=task_name)
             if not _stash_local_changes(repo_path, task_name): return False
             stashed = True
@@ -548,58 +551,80 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
                 log(MESSAGES["workflow_pop_stash_failed_after_pull_warning"], level='warning', task_name=task_name)
                 log(MESSAGES["workflow_manual_resolve_needed"], level='error', task_name=task_name)
                 # Decide if a pop failure should stop the whole workflow. For now, warning.
+        
+        # --- NEW: Check for changes AFTER pull and pop ---
+        has_changes_after_pull, check_error_after_pull = _check_for_changes(repo_path, task_name)
+        if check_error_after_pull: return False # Error checking changes after pull
+        
+        if not has_changes_after_pull:
+            repo_clean_after_pull = True
+            log(MESSAGES["git_repo_already_up_to_date_skip_actions"], level='info', task_name=task_name)
+        # --- END NEW ---
     else:
         log(MESSAGES["workflow_pull_before_command_skipped"], level='info', task_name=task_name)
 
-    # Execute pre-command
-    if task.pre_command:
-        if not _execute_command(task.pre_command, cwd=repo_path, task_name=task_name):
-            log(MESSAGES["workflow_pre_command_failed"], level='error', task_name=task_name)
-            return False
-        log(MESSAGES["workflow_pre_command_successful"], level='success', task_name=task_name)
-
-    # Add all changes and commit
-    log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
-    _, add_success, _ = _execute_git_command(['add', '.'], cwd=repo_path, task_name=task_name)
-    if not add_success:
-        return False
-    log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
-
-    log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
-    
-    # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
-    final_commit_message = task.commit_message
-    if task.timestamp_format:
-        timestamp_str = datetime.now().strftime(task.timestamp_format)
-        final_commit_message = f"{task.commit_message} [{timestamp_str}]"
-    # --- END CONSTRUCT COMMIT MESSAGE ---
-
-    # --- Capture the commit_made flag ---
-    _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
-    log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name) # ADDED DEBUG LINE
-    if not commit_success:
-        return False # Genuine commit error
-    # --- End capture ---
-        
-    # Push changes if configured
-    if task.push_after_command:
-        # --- NEW: Only push if a commit was actually made ---
-        if commit_made:
-            log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
-            _, push_success, _ = _execute_git_command(['push', 'origin', branch], cwd=repo_path, task_name=task_name)
-            if not push_success:
+    # --- NEW: Conditional execution of pre_command, add, commit, push, post_command ---
+    if not repo_clean_after_pull:
+        # Execute pre-command
+        if task.pre_command:
+            log(MESSAGES["workflow_executing_pre_command"], level='step', task_name=task_name)
+            if not _execute_command(task.pre_command, cwd=repo_path, task_name=task_name):
+                log(MESSAGES["workflow_pre_command_failed"], level='error', task_name=task_name)
                 return False
-            log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
-        else:
-            log(MESSAGES["git_push_skipped_no_new_commit"], level='info', task_name=task_name)
-        # --- END NEW ---
+            log(MESSAGES["workflow_pre_command_successful"], level='success', task_name=task_name)
 
-    # Execute post-command
-    if task.post_command:
-        if not _execute_command(task.post_command, cwd=repo_path, task_name=task_name):
-            log(MESSAGES["workflow_post_command_failed"], level='error', task_name=task_name)
+        # Add all changes and commit
+        log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
+        _, add_success, _ = _execute_git_command(['add', '.'], cwd=repo_path, task_name=task_name)
+        if not add_success:
             return False
-        log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
+        log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
+
+        log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
+        
+        # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
+        final_commit_message = task.commit_message
+        if task.timestamp_format:
+            timestamp_str = datetime.now().strftime(task.timestamp_format)
+            final_commit_message = f"{task.commit_message} [{timestamp_str}]"
+        # --- END CONSTRUCT COMMIT MESSAGE ---
+
+        # --- Capture the commit_made flag ---
+        _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
+        log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name)
+        if not commit_success:
+            return False # Genuine commit error
+        # --- End capture ---
+            
+        # Push changes if configured
+        if task.push_after_command:
+            # --- NEW: Only push if a commit was actually made ---
+            if commit_made:
+                log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
+                _, push_success, _ = _execute_git_command(['push', 'origin', branch], cwd=repo_path, task_name=task_name)
+                if not push_success:
+                    return False
+                log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
+            else:
+                log(MESSAGES["git_push_skipped_no_new_commit"], level='info', task_name=task_name)
+            # --- END NEW ---
+
+        # Execute post-command
+        if task.post_command:
+            log(MESSAGES["workflow_executing_post_command"], level='step', task_name=task_name)
+            if not _execute_command(task.post_command, cwd=repo_path, task_name=task_name):
+                log(MESSAGES["workflow_post_command_failed"], level='error', task_name=task_name)
+                return False
+            log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
+    else:
+        # If repo is clean after pull, but pre_command or post_command are defined,
+        # we should log that they are skipped, rather than executing them.
+        # This aligns with the intention of skipping further actions if the repo is already up-to-date.
+        if task.pre_command or task.post_command:
+             log(MESSAGES["update_skipping_pre_post_commands"], level='info', task_name=task_name)
+
+
+    # --- END NEW CONDITIONAL EXECUTION ---
 
     log(MESSAGES["workflow_completed"].format(task_name), level='success', task_name=task_name)
     return True
@@ -608,7 +633,8 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
 def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_path: str):
     """
     Executes a simplified update workflow focused on pull/commit/push.
-    This version implicitly skips pre_command and post_command.
+    This version implicitly skips pre_command and post_command (now explicitly handled
+    by the `repo_clean_after_pull` check and the message below).
     """
     task_name = task.name
 
@@ -691,14 +717,17 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
         
     log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
 
+    # Flag to track if the repo is clean after pull (and potential stash pop)
+    repo_clean_after_pull = False
+
     # --- START STASH/PULL/POP LOGIC FOR UPDATE WORKFLOW ---
     log(MESSAGES["git_pulling_latest"], level='step', task_name=task_name)
     
-    has_local_changes, check_error = _check_for_changes(repo_path, task_name)
+    has_local_changes_before_pull, check_error = _check_for_changes(repo_path, task_name)
     if check_error: return False
     
     stashed = False
-    if has_local_changes:
+    if has_local_changes_before_pull:
         log(MESSAGES["workflow_local_changes_found_stashing"], level='info', task_name=task_name)
         if not _stash_local_changes(repo_path, task_name): return False
         stashed = True
@@ -719,53 +748,58 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
             log(MESSAGES["workflow_pop_stash_failed_after_pull_warning"], level='warning', task_name=task_name)
             log(MESSAGES["workflow_manual_resolve_needed"], level='error', task_name=task_name)
             # Decide if a pop failure should stop the whole workflow. For now, warning.
-    # --- END STASH/PULL/POP LOGIC FOR UPDATE WORKFLOW ---
+    
+    # --- NEW: Check for changes AFTER pull and pop ---
+    has_changes_after_pull, check_error_after_pull = _check_for_changes(repo_path, task_name)
+    if check_error_after_pull: return False # Error checking changes after pull
+    
+    if not has_changes_after_pull:
+        repo_clean_after_pull = True
+        log(MESSAGES["git_repo_already_up_to_date_skip_actions"], level='info', task_name=task_name)
+    # --- END NEW ---
 
-    # Pre-command is explicitly skipped in update workflow
+    # Pre-command and post-command are explicitly skipped in update workflow
+    # This message is now slightly redundant due to the new logic but kept for clarity if `repo_clean_after_pull` is false
     log(MESSAGES["update_skipping_pre_post_commands"], level='info', task_name=task_name)
 
-    # Add all changes and commit
-    log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
-    _, add_success, _ = _execute_git_command(['add', '.'], cwd=repo_path, task_name=task_name)
-    if not add_success:
-        return False
-    log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
-
-    log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
-    
-    # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
-    final_commit_message = task.commit_message
-    if task.timestamp_format:
-        timestamp_str = datetime.now().strftime(task.timestamp_format)
-        final_commit_message = f"{task.commit_message} [{timestamp_str}]"
-    # --- END CONSTRUCT COMMIT MESSAGE ---
-
-    # --- Capture the commit_made flag ---
-    _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
-    log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name) # ADDED DEBUG LINE
-    if not commit_success:
-        return False # Genuine commit error
-    # --- End capture ---
-    
-    # Push changes if configured
-    if task.push_after_command:
-        # --- NEW: Only push if a commit was actually made ---
-        if commit_made:
-            log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
-            _, push_success, _ = _execute_git_command(['push', 'origin', branch], cwd=repo_path, task_name=task_name)
-            if not push_success:
-                return False
-            log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
-        else:
-            log(MESSAGES["git_push_skipped_no_new_commit"], level='info', task_name=task_name)
-        # --- END NEW ---
-
-    # Execute post-command
-    if task.post_command:
-        if not _execute_command(task.post_command, cwd=repo_path, task_name=task_name):
-            log(MESSAGES["workflow_post_command_failed"], level='error', task_name=task_name)
+    # --- NEW: Conditional execution of add, commit, push ---
+    if not repo_clean_after_pull:
+        # Add all changes and commit
+        log(MESSAGES["git_adding_changes"], level='step', task_name=task_name)
+        _, add_success, _ = _execute_git_command(['add', '.'], cwd=repo_path, task_name=task_name)
+        if not add_success:
             return False
-        log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
+        log(MESSAGES["git_changes_added"], level='success', task_name=task_name)
+
+        log(MESSAGES["git_committing_changes"], level='step', task_name=task_name)
+        
+        # --- CONSTRUCT COMMIT MESSAGE WITH TIMESTAMP ---
+        final_commit_message = task.commit_message
+        if task.timestamp_format:
+            timestamp_str = datetime.now().strftime(task.timestamp_format)
+            final_commit_message = f"{task.commit_message} [{timestamp_str}]"
+        # --- END CONSTRUCT COMMIT MESSAGE ---
+
+        # --- Capture the commit_made flag ---
+        _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
+        log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name)
+        if not commit_success:
+            return False # Genuine commit error
+        # --- End capture ---
+        
+        # Push changes if configured
+        if task.push_after_command:
+            # --- NEW: Only push if a commit was actually made ---
+            if commit_made:
+                log(MESSAGES["git_pushing_changes"].format(branch), level='step', task_name=task_name)
+                _, push_success, _ = _execute_git_command(['push', 'origin', branch], cwd=repo_path, task_name=task_name)
+                if not push_success:
+                    return False
+                log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
+            else:
+                log(MESSAGES["git_push_skipped_no_new_commit"], level='info', task_name=task_name)
+            # --- END NEW ---
+    # --- END NEW CONDITIONAL EXECUTION ---
 
     log(MESSAGES["update_workflow_completed"].format(task_name), level='success', task_name=task_name)
     return True
@@ -797,16 +831,7 @@ def run_pull_workflow(args: SimpleNamespace, task: SimpleNamespace):
     if origin_url:
         log(MESSAGES["git_checking_remote"].format(origin_url), level='debug', task_name=task_name)
         stdout_remotes, success_remotes, _ = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
-        if not success_remotes: # Failed to list remotes
-            return False
-        
-        origin_exists = False
-        for line in stdout_remotes.splitlines():
-            if line.startswith('origin') and origin_url in line:
-                origin_exists = True
-                break
-        
-        if not origin_exists:
+        if not success_remotes or origin_url not in stdout_remotes:
             log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
             _, success_add_remote, _ = _execute_git_command(['remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name)
             if not success_add_remote:
