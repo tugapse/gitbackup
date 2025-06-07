@@ -119,7 +119,7 @@ MESSAGES = {
     "git_adding_changes": "Adding all changes to staging...",
     "git_changes_added": "Changes added to staging.",
     "git_committing_changes": "Committing changes...",
-    "git_changes_committed": "Changes committed.", # Modified message: Now implies a commit was actually made
+    "git_changes_committed": "Changes committed.",
     "git_no_changes_to_commit": "No changes to commit.",
     "git_pushing_changes": "Pushing changes to remote branch '{}'...",
     "git_push_successful": "Git push successful.",
@@ -139,7 +139,8 @@ MESSAGES = {
     "git_fetch_failed": "Failed to fetch from remote branch '{}'.",
     "git_log_failed": "Failed to retrieve commit log for '{}'.",
     "git_fetching_remote_commits": "Fetching last commits from remote branch '{}'...", 
-    "git_push_skipped_no_new_commit": "Push skipped: No new commits were made.", # NEW
+    "git_push_skipped_no_new_commit": "Push skipped: No new commits were made.",
+    "git_repo_already_up_to_date_skip_actions": "Repository is already up-to-date, no further add, commit, or push required.", # NEW MESSAGE
 
     # --- Show Last Commits Workflow (no prefixes) ---
     "show_last_commits_start": "Showing last 5 commits for task '{}' on branch '{}'.",
