@@ -904,4 +904,4 @@ def run_pull_workflow(args: SimpleNamespace, task: SimpleNamespace):
             # Decide if a pop failure should stop the whole workflow. For now, warning.
     
     log(MESSAGES["pull_workflow_completed"].format(task_name), level='success', task_name=task_name)
-    return True
+    return True  
