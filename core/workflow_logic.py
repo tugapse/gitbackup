@@ -704,5 +704,101 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
             return False
         log(MESSAGES["workflow_post_command_successful"], level='success', task_name=task_name)
 
-    log(MESSAGES["workflow_completed"].format(task_name), level='success', task_name=task_name)
+    log(MESSAGES["update_workflow_completed"].format(task_name), level='success', task_name=task_name)
+    return True
+
+# --- NEW: run_pull_workflow ---
+def run_pull_workflow(args: SimpleNamespace, task: SimpleNamespace):
+    """
+    Executes a pull-only workflow with automatic stash/pop.
+    Skips pre/post commands, add, commit, and push.
+    """
+    task_name = task.name
+
+    log(MESSAGES["pull_workflow_start"].format(task_name), level='info', task_name=task_name)
+
+    # Prioritize command-line overrides for folder, branch, origin
+    repo_path = args.folder if args.folder else task.folder
+    branch = args.branch if args.branch else task.branch
+    origin_url = args.origin if args.origin else task.origin
+
+    # Ensure repository directory exists and is a Git repo
+    if not os.path.exists(repo_path):
+        log(MESSAGES["update_error_folder_not_found"].format(repo_path), level='error', task_name=task_name)
+        return False
+    if not _is_git_repo(repo_path):
+        log(MESSAGES["update_error_not_git_repo"].format(repo_path), level='error', task_name=task_name)
+        return False
+    
+    # Ensure origin is set if it was defined in config (or overridden)
+    if origin_url:
+        log(MESSAGES["git_checking_remote"].format(origin_url), level='debug', task_name=task_name)
+        stdout_remotes, success_remotes = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
+        if not success_remotes or origin_url not in stdout_remotes:
+            log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
+            if not _execute_git_command(['remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name)[1]:
+                return False
+
+    # Checkout or switch to the specified branch
+    log(MESSAGES["git_checking_out_branch"].format(branch), level='step', task_name=task_name)
+    
+    _, local_branch_exists = _execute_git_command(['rev-parse', '--verify', branch], cwd=repo_path, task_name=task_name, log_level='debug')
+
+    if local_branch_exists:
+        log(MESSAGES["git_branch_found_local"].format(branch), level='info', task_name=task_name)
+        if not _execute_git_command(['checkout', branch], cwd=repo_path, task_name=task_name)[1]:
+            log(MESSAGES["git_branch_checkout_failed"].format(branch), level='error', task_name=task_name)
+            return False
+    else:
+        log(MESSAGES["git_branch_not_found_local"].format(branch), level='info', task_name=task_name)
+        stdout_remote_branches, success_remote_branches = _execute_git_command(['ls-remote', '--heads', 'origin', branch], cwd=repo_path, task_name=task_name, log_level='debug')
+        
+        remote_branch_exists = success_remote_branches and f'refs/heads/{branch}' in stdout_remote_branches
+
+        if remote_branch_exists:
+            log(MESSAGES["git_branch_found_remote"].format(branch, 'origin'), level='info', task_name=task_name)
+            if not _execute_git_command(['checkout', '--track', f'origin/{branch}'], cwd=repo_path, task_name=task_name)[1]:
+                log(MESSAGES["git_branch_checkout_failed"].format(branch), level='error', task_name=task_name)
+                return False
+        else:
+            log(MESSAGES["git_branch_not_found_local_or_remote"].format(branch), level='info', task_name=task_name)
+            if not _execute_git_command(['checkout', '-b', branch], cwd=repo_path, task_name=task_name)[1]:
+                log(MESSAGES["git_branch_creation_failed"].format(branch), level='error', task_name=task_name)
+                return False
+            if origin_url:
+                log(MESSAGES["git_pushing_new_branch"].format(branch, 'origin', branch), level='normal', task_name=task_name)
+                if not _execute_git_command(['push', '-u', 'origin', branch], cwd=repo_path, task_name=task_name)[1]:
+                    log(MESSAGES["git_push_new_branch_failed_warning"].format(branch, 'origin', branch), level='warning', task_name=task_name)
+        
+    log(MESSAGES["git_on_branch"].format(branch), level='success', task_name=task_name)
+
+    # Perform pull with stash/pop
+    log(MESSAGES["git_pulling_latest"], level='step', task_name=task_name)
+    
+    has_local_changes, check_error = _check_for_changes(repo_path, task_name)
+    if check_error: return False
+    
+    stashed = False
+    if has_local_changes:
+        log(MESSAGES["workflow_local_changes_found_stashing"], level='info', task_name=task_name)
+        if not _stash_local_changes(repo_path, task_name): return False
+        stashed = True
+    else:
+        log(MESSAGES["workflow_no_local_changes_to_stash"], level='info', task_name=task_name)
+
+    if not _execute_git_command(['pull', 'origin', branch], cwd=repo_path, task_name=task_name)[1]:
+        log(MESSAGES["git_pull_failed"].format(branch), level='error', task_name=task_name)
+        if stashed:
+            log(MESSAGES["workflow_pull_failed_attempting_pop"], level='warning', task_name=task_name)
+            _pop_stashed_changes(repo_path, task_name) # Attempt pop even if it fails
+        return False
+    log(MESSAGES["git_pull_successful"], level='success', task_name=task_name)
+
+    if stashed:
+        if not _pop_stashed_changes(repo_path, task_name):
+            log(MESSAGES["workflow_pop_stash_failed_after_pull_warning"], level='warning', task_name=task_name)
+            log(MESSAGES["workflow_manual_resolve_needed"], level='error', task_name=task_name)
+            # Decide if a pop failure should stop the whole workflow. For now, warning.
+    
+    log(MESSAGES["pull_workflow_completed"].format(task_name), level='success', task_name=task_name)
     return True
