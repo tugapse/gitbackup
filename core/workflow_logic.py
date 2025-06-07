@@ -22,6 +22,10 @@ def _check_for_changes(repo_path, task_name):
     
     if stdout.strip(): # If stdout is not empty, there are changes
         log(MESSAGES["git_changes_detected_status_check"], level='debug', task_name=task_name)
+        # --- NEW: Log the specific changes detected at debug level ---
+        for line in stdout.strip().splitlines():
+            log(f"  Detected change: {line}", level='debug', task_name=task_name)
+        # --- END NEW ---
         return True, False # True for changes, False for no error
     else:
         log(MESSAGES["git_no_changes_detected_status_check"], level='debug', task_name=task_name)
@@ -211,7 +215,7 @@ def _get_remote_commits(repo_path, branch, task_name, num_commits=5):
     log(MESSAGES["git_fetching_remote_commits"].format(branch), level='step', task_name=task_name)
     
     # First, ensure we have the latest remote history
-    _, success, _ = _execute_git_command(['fetch', 'origin', branch], cwd=repo_path, task_name=task_name)[1]
+    _, success, _ = _execute_git_command(['fetch', 'origin', branch], cwd=repo_path, task_name=task_name)
     if not success:
         log(MESSAGES["git_fetch_failed"].format(branch), level='error', task_name=task_name)
         return None
@@ -260,7 +264,8 @@ def run_show_last_commits_workflow(args: SimpleNamespace, task: SimpleNamespace)
         stdout_remotes, success_remotes, _ = _execute_git_command(['remote', '-v'], cwd=repo_path, task_name=task_name, log_level='debug')
         if not success_remotes or origin_url not in stdout_remotes:
             log(MESSAGES["git_adding_remote"].format(origin_url), level='step', task_name=task_name)
-            if not _execute_git_command(['remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name)[1]: # Only care about success
+            _, success_add_remote, _ = _execute_git_command(['remote', 'add', 'origin', origin_url], cwd=repo_path, task_name=task_name)
+            if not success_add_remote:
                 return
 
     commits = _get_remote_commits(repo_path, branch, task_name)
@@ -571,6 +576,7 @@ def run_task_workflow(args: SimpleNamespace, task: SimpleNamespace, config_file_
 
     # --- Capture the commit_made flag ---
     _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
+    log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name) # ADDED DEBUG LINE
     if not commit_success:
         return False # Genuine commit error
     # --- End capture ---
@@ -736,6 +742,7 @@ def run_update_task_workflow(args: SimpleNamespace, task: SimpleNamespace, confi
 
     # --- Capture the commit_made flag ---
     _, commit_success, commit_made = _execute_git_command(['commit', '-m', final_commit_message], cwd=repo_path, task_name=task_name)
+    log(f"DEBUG: commit_made value: {repr(commit_made)} (type: {type(commit_made)})", level='debug', task_name=task_name) # ADDED DEBUG LINE
     if not commit_success:
         return False # Genuine commit error
     # --- End capture ---
