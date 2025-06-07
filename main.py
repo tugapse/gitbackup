@@ -7,11 +7,16 @@ import sys
 # Add the project root to the sys.path to ensure modules can be found
 script_dir = os.path.dirname(__file__)
 if script_dir not in sys.path:
-    sys.path.insert(0, script_dir)
+    sys.sys.path.insert(0, script_dir)
 
 # Import necessary modules
-from core.workflow_logic import run_task_workflow, run_update_task_workflow, \
-                               run_show_last_commits_workflow, run_revert_commit_workflow # NEW IMPORTS
+from core.workflow_logic import (
+    run_task_workflow,
+    run_update_task_workflow,
+    run_show_last_commits_workflow,
+    run_revert_commit_workflow,
+    run_pull_workflow
+)
 from core.config_operations import (
     create_config_file, edit_config_file, list_tasks,
     get_config_file_path, read_config_file, get_default_config_dir
@@ -36,76 +41,79 @@ def main():
         # Mutually exclusive group for main commands
         command_group = parser.add_mutually_exclusive_group()
         command_group.add_argument(
-            '--create',
+            '--create', '-c', # Added -c
             action='store_true',
             help=MESSAGES["cli_create_help"]
         )
         command_group.add_argument(
-            '--json',
+            '--json', '-j', # Added -j
             help=MESSAGES["cli_json_help"]
         )
         command_group.add_argument(
-            '--edit',
+            '--edit', '-e', # Added -e
             action='store_true',
             help=MESSAGES["cli_edit_help"]
         )
         command_group.add_argument(
-            '--list',
+            '--list', '-l', # Added -l
             action='store_true',
             help=MESSAGES["cli_list_help"]
         )
         command_group.add_argument(
-            '--update',
+            '--update', '-u', # Added -u
             action='store_true',
             help=MESSAGES["cli_update_help"]
         )
-        # --- NEW ARGUMENTS START ---
         command_group.add_argument(
-            '--show-last-commits',
+            '--show-last-commits', '-s', # Added -s
             action='store_true',
-            help=MESSAGES["cli_show_last_commits_help"] # New message key
+            help=MESSAGES["cli_show_last_commits_help"]
         )
         command_group.add_argument(
-            '--revert-commit',
+            '--revert-commit', '-r', # Added -r
             action='store_true',
-            help=MESSAGES["cli_revert_commit_help"] # New message key
+            help=MESSAGES["cli_revert_commit_help"]
         )
-        # --- NEW ARGUMENTS END ---
+        command_group.add_argument(
+            '--pull', '-p', # Added -p
+            action='store_true',
+            help=MESSAGES["cli_pull_help"]
+        )
 
         # Optional arguments (can be combined with task running commands, but not create/edit/list/update)
         parser.add_argument(
-            '--config-dir',
+            '--config-dir', '-C', # Added -C
             default=os.environ.get('GIT_AUTOMATION_CONFIG_DIR', None),
             help=MESSAGES["cli_config_dir_help_env"].format("~/.config/git_automation_configs (Linux/macOS) or %%APPDATA%%/git_automation_configs (Windows)")
         )
         parser.add_argument(
-            '--output',
+            '--output', '-o', # Added -o
             help=MESSAGES["cli_output_help"]
         )
         parser.add_argument(
-            '--branch',
+            '--branch', '-b', # Added -b
             help=MESSAGES["cli_branch_override_help"]
         )
         parser.add_argument(
-            '--origin',
+            '--origin', '-O', # Added -O
             help=MESSAGES["cli_origin_override_help"]
         )
         parser.add_argument(
-            '--folder', # Changed from --repo-path to --folder for consistency
+            '--folder', '-f', # Added -f
             help=MESSAGES["cli_folder_help"]
         )
         parser.add_argument(
-            '--verbose',
+            '--verbose', '-v', # Added -v
             action='store_true',
             help=MESSAGES["cli_verbose_help"]
         )
         parser.add_argument(
-            '--overwrite',
+            '--overwrite', '-w', # Added -w
             action='store_true',
             help=MESSAGES["cli_overwrite_help"]
         )
         parser.add_argument(
-            '--initialize',
+            '--initialize', '-i', # Added -i
             action='store_true',
             help=MESSAGES["cli_initialize_help"]
         )
@@ -119,10 +127,6 @@ def main():
 
         # Determine the actual config directory to use
         args.config_dir = get_default_config_dir(args.config_dir)
-
-        # Handle mutually exclusive commands
-        # The mutual_exclusive_group handles this for the main command flags.
-        # We just need to check for task_identifier presence for specific commands.
 
         if args.list:
             list_tasks(args)
@@ -138,16 +142,15 @@ def main():
 
         if args.edit:
             if not args.task_identifier:
-                log(MESSAGES["cli_edit_requires_task_identifier"], level='error') # New message key
+                log(MESSAGES["cli_edit_requires_task_identifier"], level='error')
                 parser.print_help()
                 sys.exit(1)
             edit_config_file(args)
             sys.exit(0)
 
-        # --- NEW FEATURE HANDLING START ---
         if args.show_last_commits:
             if not args.task_identifier:
-                log(MESSAGES["cli_show_last_commits_requires_task_identifier"], level='error') # New message key
+                log(MESSAGES["cli_show_last_commits_requires_task_identifier"], level='error')
                 parser.print_help()
                 sys.exit(1)
             config_file_path = args.json if args.json else get_config_file_path(args.task_identifier, args.config_dir)
@@ -158,15 +161,25 @@ def main():
 
         if args.revert_commit:
             if not args.task_identifier:
-                log(MESSAGES["cli_revert_commit_requires_task_identifier"], level='error') # New message key
+                log(MESSAGES["cli_revert_commit_requires_task_identifier"], level='error')
                 parser.print_help()
                 sys.exit(1)
             config_file_path = args.json if args.json else get_config_file_path(args.task_identifier, args.config_dir)
             task = read_config_file(config_file_path)
             if task is None: sys.exit(1)
-            run_revert_commit_workflow(args, task) # This will handle interaction
+            run_revert_commit_workflow(args, task)
             sys.exit(0)
-        # --- NEW FEATURE HANDLING END ---
+        
+        if args.pull:
+            if not args.task_identifier:
+                log(MESSAGES["cli_pull_requires_task_identifier"], level='error')
+                parser.print_help()
+                sys.exit(1)
+            config_file_path = args.json if args.json else get_config_file_path(args.task_identifier, args.config_dir)
+            task = read_config_file(config_file_path)
+            if task is None: sys.exit(1)
+            run_pull_workflow(args, task)
+            sys.exit(0)
 
         # Ensure task_identifier or --json is provided for other operations (default run or update)
         if not args.task_identifier and not args.json:
@@ -178,7 +191,6 @@ def main():
         config_file_path = args.json if args.json else get_config_file_path(args.task_identifier, args.config_dir)
 
         # Read the task configuration
-        # 'task' will now be a SimpleNamespace object
         task = read_config_file(config_file_path)
 
         if task is None:
@@ -187,8 +199,7 @@ def main():
         # If --update is specified, run the update workflow
         if args.update:
             log(f"Inside --update block.", level='debug')
-            log(f"args.task_identifier is: {args.task_identifier}", level='debug')
-            run_update_task_workflow(args, task, config_file_path) # Call the new update workflow
+            run_update_task_workflow(args, task, config_file_path)
             log(f"run_update_task_workflow finished. Exiting.", level='debug')
         else:
             # Default behavior: run the regular task workflow
