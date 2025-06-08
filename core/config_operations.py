@@ -14,7 +14,8 @@ DEFAULT_TASK_CONFIG = {
     "git_repo_path": os.path.abspath(os.path.join(os.getcwd(), "path/to/your/local_git_repo")),
     "command_line": "echo 'Your command here (e.g., npm run build, python script.py)'",
     "default_commit_message": "Automated update",
-    "generate_commit_message_command": None
+    "generate_commit_message_command": None,
+    "handle_local_changes_before_pull": "auto_stash" # NEW FIELD: default to auto_stash
 }
 
 
@@ -124,4 +125,3 @@ def fix_config_files(config_dir):
                 log(MESSAGES["config_fixed_error"].format(filename, e), level='error')
     
     log(MESSAGES["config_finished_fixing_jsons"], level='step')
-

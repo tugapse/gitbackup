@@ -2,9 +2,9 @@
 
 import subprocess
 import os
+from datetime import datetime
 from core.logger import log
 from core.messages import MESSAGES
-from core.command_logic import execute_command # Import execute_command for dynamic commit message
 
 def _execute_git_command(command_parts, cwd, task_name, log_stdout_stderr=True):
     """
@@ -34,7 +34,7 @@ def _execute_git_command(command_parts, cwd, task_name, log_stdout_stderr=True):
         # Special handling for git diff: exit code 1 means differences found (success for our purpose)
         if is_diff_command and result.returncode == 1:
             log(MESSAGES["git_command_failed"].format(result.returncode), level='debug', task_name=task_name) # Log as debug for diff
-            return result.stdout.strip(), True # Treat as success (differences found)
+            return result.stdout.strip(), True # Treat as success
         
         # For all other commands, or if diff command had a fatal error (exit code > 1)
         if result.returncode != 0:
@@ -146,6 +146,76 @@ def checkout_or_create_branch(repo_path, branch_name, origin_name="origin", task
     return True
 
 
+def _check_for_unstaged_changes(repo_path, task_name):
+    """
+    Checks if there are any uncommitted changes (staged or unstaged, excluding untracked files with '??').
+    Returns True if changes are found, False if no changes.
+    """
+    # Use --porcelain=v1 to get a stable format, only showing changes to tracked files.
+    # We are interested in any status other than '??' (untracked).
+    stdout, success = _execute_git_command(['status', '--porcelain=v1'], cwd=repo_path, task_name=task_name, log_stdout_stderr=False)
+    if not success:
+        log(MESSAGES["git_error_status_check"], level='error', task_name=task_name)
+        return False # Indicate error during check
+
+    # Filter out untracked files ('??') from the status output
+    # This leaves 'M', 'A', 'D', 'R', 'C' etc. (staged or unstaged changes to tracked files)
+    lines_with_changes = [line for line in stdout.strip().splitlines() if not line.startswith('??')]
+    
+    if lines_with_changes:
+        log(MESSAGES["git_local_changes_detected_pull_blocked"], level='normal', task_name=task_name)
+        # Log the actual changes at debug level
+        for line in lines_with_changes:
+            log(f"  Detected change: {line}", level='debug', task_name=task_name)
+        return True
+    else:
+        log(MESSAGES["git_skipping_stash_no_changes"], level='normal', task_name=task_name)
+        return False
+
+def stash_local_changes(repo_path, task_name):
+    """Stashes local changes (including untracked files) before a pull."""
+    log(MESSAGES["git_auto_stashing_changes"], level='step', task_name=task_name)
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    stash_message = f"gitb_auto_stash_{timestamp}" # Use timestamp for uniqueness
+    stdout, success = _execute_git_command(['stash', 'push', '--include-untracked', '-m', stash_message], cwd=repo_path, task_name=task_name)
+    
+    if not success:
+        log(MESSAGES["git_stash_failed"], level='error', task_name=task_name)
+        return False
+    
+    # Check if a stash was actually created (e.g., "No local changes to save" means it wasn't)
+    if "No local changes to save" in stdout: # Git prints this if nothing was stashed
+        log(MESSAGES["git_skipping_stash_no_changes"], level='normal', task_name=task_name)
+        return False # Indicate no stash was performed because nothing was there
+    
+    log(MESSAGES["git_stash_successful"], level='success', task_name=task_name)
+    return True
+
+def pop_stashed_changes(repo_path, task_name):
+    """Attempts to apply stashed changes back after a pull."""
+    log(MESSAGES["git_stash_pop_applying"], level='step', task_name=task_name)
+
+    # Check if there are any stashes first
+    stdout_list, success_list = _execute_git_command(['stash', 'list'], cwd=repo_path, task_name=task_name, log_stdout_stderr=False)
+    if not success_list or not stdout_list.strip():
+        log(MESSAGES["git_stash_pop_no_stash"], level='normal', task_name=task_name)
+        return True # Nothing to pop, so consider it successful
+
+    # Attempt to pop the most recent stash
+    stdout_pop, success_pop = _execute_git_command(['stash', 'pop'], cwd=repo_path, task_name=task_name)
+    
+    if not success_pop:
+        # Check for conflict indicators in stdout or stderr
+        if "Merge conflict" in stdout_pop or "conflict" in stdout_pop or \
+           "could not apply all your changes" in stdout_pop:
+            log(MESSAGES["git_stash_pop_failed_conflict"], level='error', task_name=task_name)
+        else:
+            log(MESSAGES["git_stash_failed"].format(stdout_pop.strip()), level='error', task_name=task_name)
+        return False # Stash pop failed
+    
+    log(MESSAGES["git_stash_pop_successful"], level='success', task_name=task_name)
+    return True
+
 def pull_updates(repo_path, branch, task_name=""):
     """Performs a Git pull operation."""
     log(MESSAGES["git_pulling_updates"].format(branch), level='normal', task_name=task_name)
@@ -158,8 +228,9 @@ def pull_updates(repo_path, branch, task_name=""):
 
 def diff_changes(repo_path, task_name=""):
     """
-    Checks for changes (staged, unstaged, untracked) in the repository.
-    Returns True if changes are found, False if no changes, None if an error occurs.
+    Checks for all changes (staged, unstaged, untracked) in the repository
+    and returns a boolean indicating if any changes are found.
+    This is for `diff_changes` (for `git status` check) not `_check_for_unstaged_changes`.
     """
     log(MESSAGES["git_checking_status"], level='normal', task_name=task_name)
     stdout, success = _execute_git_command(['status', '--porcelain'], cwd=repo_path, task_name=task_name)
@@ -212,4 +283,3 @@ def push_updates(repo_path, branch, origin="origin", task_name=""):
         return False
     log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
     return True
-

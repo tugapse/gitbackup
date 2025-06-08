@@ -1,55 +1,59 @@
+# core/command_logic.py
+
 import subprocess
 import os
+import sys
 from core.logger import log
 from core.messages import MESSAGES
 
-def execute_command(command_line, task_name="", cwd=None):
+def execute_command(command, task_name="", cwd=None, capture_output=False): # ADDED capture_output=False
     """
-    Executes a shell command.
-    
-    Args:
-        command_line (str): The command string to execute.
-        task_name (str): The name of the task for logging purposes.
-        cwd (str): The current working directory for the command.
-    
-    Returns:
-        bool: True if the command executed successfully, False otherwise.
+    Executes a shell command and logs its output.
+    Returns: (stdout: str, success: bool) if capture_output is True,
+             (None, success: bool) if capture_output is False.
     """
-    if not command_line:
-        log(MESSAGES["command_no_command_line"], level='debug', task_name=task_name)
-        return True # No command to execute is considered a success
+    if not command:
+        log(MESSAGES["command_no_command_specified"], level='normal', task_name=task_name)
+        return (None, True) # Consider no command as a success, nothing to do
 
-    log(MESSAGES["command_executing"].format(command_line), level='normal', task_name=task_name)
+    log(MESSAGES["command_executing"].format(command), level='normal', task_name=task_name)
+
+    if cwd and not os.path.isdir(cwd):
+        log(MESSAGES["command_error_cwd_not_exist"].format(cwd), level='error', task_name=task_name)
+        return (None, False)
+
     try:
-        # Use shell=True for complex commands with pipes, redirects etc.
-        # Ensure proper error handling and output capture
+        # Determine how to capture output
+        stdout_dest = subprocess.PIPE if capture_output else None
+        stderr_dest = subprocess.PIPE if capture_output else None
+
         result = subprocess.run(
-            command_line,
-            shell=True,
-            check=False, # We check returncode manually
+            command,
             cwd=cwd,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
+            shell=True, # Execute command via shell
+            capture_output=capture_output, # Use the passed capture_output flag
+            text=True, # Ensure output is decoded as text
+            check=False # Do not raise CalledProcessError automatically
         )
 
-        if result.stdout:
-            for line in result.stdout.strip().splitlines():
-                log(MESSAGES["command_stdout"].format(line), level='debug', task_name=task_name)
-        if result.stderr:
-            for line in result.stderr.strip().splitlines():
-                log(MESSAGES["command_stderr"].format(line), level='debug', task_name=task_name)
+        output_stdout = result.stdout.strip() if result.stdout else ""
+        output_stderr = result.stderr.strip() if result.stderr else ""
+
+        if output_stdout:
+            log(MESSAGES["command_stdout"].format(output_stdout), level='debug', task_name=task_name)
+        if output_stderr:
+            log(MESSAGES["command_stderr"].format(output_stderr), level='debug', task_name=task_name)
 
         if result.returncode != 0:
-            log(MESSAGES["command_failed"].format(result.returncode), level='error', task_name=task_name)
-            return False
+            log(MESSAGES["command_failed_exit_code"].format(result.returncode), level='error', task_name=task_name)
+            return (output_stdout, False) # Return output even on failure if captured
         
-        log(MESSAGES["command_success"], level='success', task_name=task_name)
-        return True
+        log(MESSAGES["command_execution_successful"], level='debug', task_name=task_name)
+        return (output_stdout, True)
 
     except FileNotFoundError:
-        log(MESSAGES["command_error_not_found"].format(command_line.split()[0]), level='error', task_name=task_name)
-        return False
+        log(MESSAGES["command_error_not_found"].format(command.split()[0]), level='error', task_name=task_name)
+        return (None, False)
     except Exception as e:
         log(MESSAGES["command_unexpected_error"].format(e), level='error', task_name=task_name)
-        return False    
+        return (None, False)
