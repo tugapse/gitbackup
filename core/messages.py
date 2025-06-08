@@ -19,6 +19,7 @@ MESSAGES = {
     "workflow_default_commit_message": "  Default Commit Message: '{}'",
     "workflow_generate_commit_message_command": "  Generate Commit Message Command: '{}'",
     "workflow_no_generate_commit_message_command": "  No command to generate commit message specified.",
+    "workflow_handle_local_changes_before_pull": "  Handling Local Changes Before Pull: '{}'", # NEW
     "workflow_error_missing_repo_path": "Error for '{}': 'git_repo_path' is missing in config.json and not provided via --folder.",
     "workflow_task_aborted_missing_info": "Task '{}' aborted due to missing essential information.",
     "workflow_repo_not_found_init_attempt": "Git repository not found at '{}'. Attempting to initialize...",
@@ -102,6 +103,16 @@ MESSAGES = {
     "git_branch_op_completed": "Branch operation for '{}' completed.",
     "git_executing_generate_message_command": "Executing command to generate commit message: '{}'",
     "git_generate_message_command_failed": "Failed to generate commit message from command. Using default message.",
+    "git_local_changes_detected_pull_blocked": "Local uncommitted changes detected. Git pull is blocked.", # NEW
+    "git_auto_stashing_changes": "Automatically stashing local changes...", # NEW
+    "git_stash_successful": "Local changes stashed successfully.", # NEW
+    "git_stash_failed": "Failed to stash local changes.", # NEW
+    "git_stash_pop_applying": "Applying stashed changes...", # NEW
+    "git_stash_pop_successful": "Stashed changes applied successfully.", # NEW
+    "git_stash_pop_failed_conflict": "Failed to pop stashed changes due to conflicts. Please resolve manually.", # NEW
+    "git_stash_pop_no_stash": "No stash entries found to pop.", # NEW
+    "git_skipping_stash_no_changes": "No uncommitted changes detected. Skipping stash.", # NEW
+
 
     # Command Logic Messages
     "command_executing": "Executing command: {}",
@@ -124,12 +135,12 @@ MESSAGES = {
     "cli_json_help": "Explicitly specify the full path to the JSON configuration file to load/edit. This overrides the positional 'task_identifier' if it was a task name.",
     "cli_config_dir_help": "Base directory for looking up config files when only a task name is provided (e.g., 'my_task' resolves to 'PATH/my_task.json'). Defaults to '{}'.",
     "cli_output_help": "Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the default config directory.",
-    "cli_branch_override_help": "Overrides the 'branch' specified in the config file for this run or pre-fills it during creation.", # ADDED
-    "cli_origin_override_help": "Overrides the 'origin' specified in the config file for this run or pre-fills it during creation.", # ADDED
-    "cli_folder_help": "Overrides the 'git_repo_path' specified in the config file for this run or pre-fills it during creation. This should be the absolute path to your local Git repository.", # ADDED
-    "cli_verbose_help": "Enable verbose output for detailed logging of operations.", # ADDED
-    "cli_overwrite_help": "When creating a configuration file, overwrite it if it already exists.", # ADDED
-    "cli_initialize_help": "Initialize the Git repository if it does not exist at the specified 'git_repo_path'.", # ADDED
+    "cli_branch_override_help": "Overrides the 'branch' specified in the config file for this run or pre-fills it during creation.",
+    "cli_origin_override_help": "Overrides the 'origin' specified in the config file for this run or pre-fills it during creation.",
+    "cli_folder_help": "Overrides the 'git_repo_path' specified in the config file for this run or pre-fills it during creation. This should be the absolute path to your local Git repository.",
+    "cli_verbose_help": "Enable verbose output for detailed logging of operations.",
+    "cli_overwrite_help": "When creating a configuration file, overwrite it if it already exists.",
+    "cli_initialize_help": "Initialize the Git repository if it does not exist at the specified 'git_repo_path'.",
     "cli_error_no_task_or_json": "No task identifier or --json path provided to run a task.",
     "cli_usage_examples": "Usage Examples:",
     "cli_example_run_by_name": "  Run by task name (e.g., 'my_daily_backup' in default config dir):",

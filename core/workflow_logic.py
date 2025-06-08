@@ -5,7 +5,7 @@ import sys
 from datetime import datetime
 from core.logger import log
 from core.command_logic import execute_command
-from core.messages import MESSAGES
+from core.messages import MESSAGES # <<-- ADDED THIS IMPORT
 
 from core.git_logic import (
     initialize_repo,
@@ -13,7 +13,10 @@ from core.git_logic import (
     pull_updates,
     diff_changes,
     add_commit_changes,
-    push_updates
+    push_updates,
+    _check_for_unstaged_changes,
+    stash_local_changes,
+    pop_stashed_changes
 )
 
 
@@ -26,9 +29,9 @@ def run_task_workflow(args, task, config_file_path):
     task_name = task.get("name", "Unnamed Task")
     command_line = task.get("command_line", "")
     
-    # RENAMED: Get default_commit_message and generate_commit_message_command
     default_commit_message = task.get("default_commit_message", f"Automated update for {task_name}")
     generate_commit_message_command = task.get("generate_commit_message_command", None)
+    handle_local_changes = task.get("handle_local_changes_before_pull", "auto_stash") 
 
     git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
     branch = args.branch if args.branch is not None else task.get("branch", "main")
@@ -43,11 +46,12 @@ def run_task_workflow(args, task, config_file_path):
     else:
         log(MESSAGES["workflow_no_precommit_command"], level='normal')
     
-    log(MESSAGES["workflow_default_commit_message"].format(default_commit_message), level='normal') # NEW LOG
+    log(MESSAGES["workflow_default_commit_message"].format(default_commit_message), level='normal')
     if generate_commit_message_command:
-        log(MESSAGES["workflow_generate_commit_message_command"].format(generate_commit_message_command), level='normal') # NEW LOG
+        log(MESSAGES["workflow_generate_commit_message_command"].format(generate_commit_message_command), level='normal')
     else:
-        log(MESSAGES["workflow_no_generate_commit_message_command"], level='normal') # NEW LOG
+        log(MESSAGES["workflow_no_generate_commit_message_command"], level='normal')
+    log(MESSAGES["workflow_handle_local_changes_before_pull"].format(handle_local_changes), level='normal')
 
 
     # --- Pre-requisite checks & Initialization ---
@@ -78,8 +82,24 @@ def run_task_workflow(args, task, config_file_path):
         log(MESSAGES["workflow_checkout_branch_failed"].format(task_name, branch), level='error')
         sys.exit(1)
 
-
     # --- Initial Git Pull ---
+    stashed_by_workflow = False
+    
+    has_uncommitted_changes = _check_for_unstaged_changes(git_repo_path, task_name)
+
+    if has_uncommitted_changes:
+        if handle_local_changes == "auto_stash":
+            if not stash_local_changes(git_repo_path, task_name):
+                log(MESSAGES["workflow_initial_pull_failed"].format(task_name), level='error')
+                sys.exit(1)
+            stashed_by_workflow = True
+        elif handle_local_changes == "fail":
+            log(MESSAGES["workflow_initial_pull_failed"].format(task_name), level='error')
+            sys.exit(1)
+        else:
+            log(f"Error: Unknown setting for 'handle_local_changes_before_pull': {handle_local_changes}. Aborting.", level='error', task_name=task_name)
+            sys.exit(1)
+
     log(MESSAGES["workflow_initial_pull"], level='step', task_name=task_name)
     if pull_updates(git_repo_path, branch, task_name):
         log(MESSAGES["workflow_initial_pull_success"], level='success', task_name=task_name)
@@ -87,6 +107,11 @@ def run_task_workflow(args, task, config_file_path):
         log(MESSAGES["workflow_initial_pull_failed"].format(task_name), level='error')
         sys.exit(1)
 
+    if stashed_by_workflow:
+        if not pop_stashed_changes(git_repo_path, task_name):
+            log(MESSAGES["workflow_task_completed_success"].format(task_name) + " with warnings.", level='warning', task_name=task_name)
+            log(MESSAGES["git_stash_pop_failed_conflict"], level='warning', task_name=task_name)
+    # END NEW LOGIC
 
     # --- Execute Command Line ---
     log(MESSAGES["workflow_executing_command_line"], level='step', task_name=task_name)
@@ -104,29 +129,21 @@ def run_task_workflow(args, task, config_file_path):
     final_commit_base_message = default_commit_message
     if generate_commit_message_command:
         log(MESSAGES["git_executing_generate_message_command"].format(generate_commit_message_command), level='normal', task_name=task_name)
-        # Assuming execute_command can return output if capture_output is implicitly true for it.
-        # It needs to return (stdout, success) tuple.
         cmd_output, cmd_success = execute_command(generate_commit_message_command, task_name, cwd=git_repo_path, capture_output=True)
         if cmd_success and cmd_output.strip():
             final_commit_base_message = cmd_output.strip()
         else:
             log(MESSAGES["git_generate_message_command_failed"], level='warning', task_name=task_name)
-            # Retain default_commit_message if command failed or returned empty
-
-    # The timestamp appending logic remains the same (it's in add_commit_changes)
-    # The actual timestamp is appended in core/git_logic.py::add_commit_changes
-
 
     # --- Check for Changes & Commit ---
     log(MESSAGES["workflow_checking_for_changes"], level='step', task_name=task_name)
     changes_found = diff_changes(git_repo_path, task_name)
-    
+
     if changes_found is None:
         log(MESSAGES["workflow_error_diff_check_failed"].format(task_name), level='error')
         sys.exit(1)
     elif changes_found:
         log(MESSAGES["workflow_changes_detected_add_commit"], level='step', task_name=task_name)
-        # Pass the dynamically determined base message to add_commit_changes
         if add_commit_changes(git_repo_path, final_commit_base_message, ".", task_name):
             log(MESSAGES["workflow_git_add_commit_success"], level='success', task_name=task_name)
             commit_successful = True
@@ -158,4 +175,3 @@ def run_task_workflow(args, task, config_file_path):
 
 
     log(MESSAGES["workflow_task_completed_success"].format(task_name), level='success', task_name=task_name)
-
