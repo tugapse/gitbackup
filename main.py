@@ -10,7 +10,8 @@ from core.cli_parser import parse_arguments
 from core.logger import set_verbose, log
 from core.messages import MESSAGES
 from core.workflow_logic import run_task_workflow
-from core.config_operations import create_config_file, fix_config_files # NEW: Import fix_config_files
+from core.config_operations import create_config_file, fix_config_files
+from core.git_logic import pull_updates # Import pull_updates for application self-update
 
 
 if __name__ == "__main__":
@@ -131,7 +132,34 @@ if __name__ == "__main__":
         fix_config_files(effective_config_base_dir)
         sys.exit(0)
 
-    # --- If none of the above specific actions (create, edit, list, fix-json) were requested, then proceed to run a task ---
+    # --- NEW: Handle --update command ---
+    if args.update:
+        app_repo_path = os.path.dirname(os.path.abspath(__file__)) # Get current script's directory
+        
+        # Check if the current directory is a Git repository
+        if not os.path.isdir(os.path.join(app_repo_path, '.git')):
+            log(MESSAGES["app_update_no_git_repo"].format(app_repo_path), level='error')
+            sys.exit(1)
+
+        log(MESSAGES["app_update_start"].format(app_repo_path), level='step')
+        
+        # Use pull_updates from core.git_logic. We assume the application's
+        # main branch is 'main' and origin is 'origin'.
+        # We pass a placeholder 'task_name' as pull_updates expects it.
+        pull_success = pull_updates(app_repo_path, "main", task_name="App Update")
+        
+        if pull_success:
+            # Check if there were actual changes pulled (stdout from pull_updates will contain "Already up to date." or "Updating...")
+            # For simplicity, we'll assume pull_updates logs enough and its success implies updates or already up-to-date.
+            log(MESSAGES["app_update_success"], level='success')
+        else:
+            log(MESSAGES["app_update_failed"].format("Git pull failed"), level='error')
+        
+        sys.exit(0)
+    # --- End NEW ---
+
+
+    # --- If none of the above specific actions (create, edit, list, fix-json, update) were requested, then proceed to run a task ---
     if not config_file_path:
         log(MESSAGES["cli_error_no_task_or_json"], level='error')
         log(MESSAGES["cli_usage_examples"], level='normal')
@@ -168,4 +196,3 @@ if __name__ == "__main__":
 
     # Call the extracted workflow function
     run_task_workflow(args, task, config_file_path)
-

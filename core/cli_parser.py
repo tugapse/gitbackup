@@ -1,6 +1,6 @@
 import argparse
 import os
-from core.messages import MESSAGES # NEW: Import MESSAGES
+from core.messages import MESSAGES
 
 def parse_arguments():
     """
@@ -35,11 +35,18 @@ def parse_arguments():
         help=MESSAGES["cli_list_help"]
     )
 
-    # --- New: --fix-json flag (added to the mutually exclusive group) ---
+    # --fix-json flag (added to the mutually exclusive group)
     group.add_argument(
         "--fix-json",
         action="store_true",
-        help=MESSAGES["cli_fix_json_help"] # New message key
+        help=MESSAGES["cli_fix_json_help"]
+    )
+
+    # --- NEW: --update flag (added to the mutually exclusive group) ---
+    group.add_argument(
+        "--update",
+        action="store_true",
+        help=MESSAGES["cli_update_help"]
     )
     # --- End new ---
 
@@ -113,4 +120,3 @@ def parse_arguments():
     )
 
     return parser.parse_args()
-

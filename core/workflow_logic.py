@@ -5,24 +5,26 @@ import sys
 from datetime import datetime
 from core.logger import log
 from core.command_logic import execute_command
-from core.messages import MESSAGES # <<-- ADDED THIS IMPORT
+from core.messages import MESSAGES
 
 from core.git_logic import (
     initialize_repo,
     checkout_or_create_branch,
     pull_updates,
-    diff_changes,
+    diff_changes, # Checks for all changes (staged, unstaged, untracked)
     add_commit_changes,
     push_updates,
-    _check_for_unstaged_changes,
-    stash_local_changes,
-    pop_stashed_changes
+    _check_for_unstaged_changes, # Checks specifically for unstaged/uncommitted changes
+    stash_local_changes,         # Function to stash changes
+    pop_stashed_changes          # Function to pop stash
 )
 
 
-def run_task_workflow(args, task, config_file_path):
+def run_task_workflow(args, task, config_file_path, update_mode=False): # ADDED update_mode=False
     """
     Executes the full Git automation workflow for a given task.
+    If update_mode is True, it performs git sync (stash/pull/pop) and commit/push,
+    skipping the command_line execution.
     """
     log(MESSAGES["workflow_start_task"].format(config_file_path), level='step')
 
@@ -41,17 +43,27 @@ def run_task_workflow(args, task, config_file_path):
     log(MESSAGES["workflow_git_repo_path"].format(git_repo_path, MESSAGES["info_cli_from_arg"] if args.folder is not None else MESSAGES["info_cli_from_config"]), level='normal')
     log(MESSAGES["workflow_branch"].format(branch, MESSAGES["info_cli_from_arg"] if args.branch is not None else MESSAGES["info_cli_from_config_default"]), level='normal')
     log(MESSAGES["workflow_origin"].format(origin, MESSAGES["info_cli_from_arg"] if args.origin is not None else MESSAGES["info_cli_from_config_default"]), level='normal')
-    if command_line:
-        log(MESSAGES["workflow_precommit_command"].format(command_line), level='normal')
-    else:
-        log(MESSAGES["workflow_no_precommit_command"], level='normal')
     
+    # Only log command_line if not in update_mode
+    if not update_mode:
+        if command_line:
+            log(MESSAGES["workflow_precommit_command"].format(command_line), level='normal')
+        else:
+            log(MESSAGES["workflow_no_precommit_command"], level='normal')
+    else: # If in update mode, and command_line exists, still log that it's being skipped
+        if command_line:
+            log(MESSAGES["workflow_precommit_command"].format(command_line) + " (Skipping in update mode)", level='normal')
+
+
     log(MESSAGES["workflow_default_commit_message"].format(default_commit_message), level='normal')
     if generate_commit_message_command:
         log(MESSAGES["workflow_generate_commit_message_command"].format(generate_commit_message_command), level='normal')
     else:
         log(MESSAGES["workflow_no_generate_commit_message_command"], level='normal')
     log(MESSAGES["workflow_handle_local_changes_before_pull"].format(handle_local_changes), level='normal')
+    
+    if update_mode: # NEW: Log if running in update mode
+        log(MESSAGES["workflow_task_update_mode_active"], level='normal')
 
 
     # --- Pre-requisite checks & Initialization ---
@@ -82,7 +94,7 @@ def run_task_workflow(args, task, config_file_path):
         log(MESSAGES["workflow_checkout_branch_failed"].format(task_name, branch), level='error')
         sys.exit(1)
 
-    # --- Initial Git Pull ---
+    # --- Initial Git Pull (always performed in update_mode, or as part of normal flow) ---
     stashed_by_workflow = False
     
     has_uncommitted_changes = _check_for_unstaged_changes(git_repo_path, task_name)
@@ -113,19 +125,24 @@ def run_task_workflow(args, task, config_file_path):
             log(MESSAGES["git_stash_pop_failed_conflict"], level='warning', task_name=task_name)
     # END NEW LOGIC
 
-    # --- Execute Command Line ---
-    log(MESSAGES["workflow_executing_command_line"], level='step', task_name=task_name)
-    if command_line:
-        if execute_command(command_line, task_name, cwd=git_repo_path):
-            log(MESSAGES["workflow_command_execution_success"], level='success', task_name=task_name)
+    # --- Execute Command Line (SKIPPED if in update_mode) ---
+    if not update_mode: # Conditional execution of command_line
+        log(MESSAGES["workflow_executing_command_line"], level='step', task_name=task_name)
+        if command_line:
+            if execute_command(command_line, task_name, cwd=git_repo_path):
+                log(MESSAGES["workflow_command_execution_success"], level='success', task_name=task_name)
+            else:
+                log(MESSAGES["workflow_command_execution_failed"].format(task_name), level='error')
+                sys.exit(1)
         else:
-            log(MESSAGES["workflow_command_execution_failed"].format(task_name), level='error')
-            sys.exit(1)
-    else:
-        log(MESSAGES["workflow_no_command_line"], level='normal', task_name=task_name)
+            log(MESSAGES["workflow_no_command_line"], level='normal', task_name=task_name)
+    else: # If in update mode, log that command_line is skipped (if it exists)
+        if command_line:
+            log(MESSAGES["workflow_no_command_line"] + " (skipped in update mode).", level='normal', task_name=task_name)
 
 
     # --- Determine the final commit message ---
+    # This block is *not* skipped in update_mode as a commit might be made
     final_commit_base_message = default_commit_message
     if generate_commit_message_command:
         log(MESSAGES["git_executing_generate_message_command"].format(generate_commit_message_command), level='normal', task_name=task_name)
@@ -137,7 +154,7 @@ def run_task_workflow(args, task, config_file_path):
 
     # --- Check for Changes & Commit ---
     log(MESSAGES["workflow_checking_for_changes"], level='step', task_name=task_name)
-    changes_found = diff_changes(git_repo_path, task_name)
+    changes_found = diff_changes(git_repo_path, task_name) # This checks for ALL changes
 
     if changes_found is None:
         log(MESSAGES["workflow_error_diff_check_failed"].format(task_name), level='error')
