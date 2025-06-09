@@ -19,7 +19,7 @@ MESSAGES = {
     "workflow_default_commit_message": "  Default Commit Message: '{}'",
     "workflow_generate_commit_message_command": "  Generate Commit Message Command: '{}'",
     "workflow_no_generate_commit_message_command": "  No command to generate commit message specified.",
-    "workflow_handle_local_changes_before_pull": "  Handling Local Changes Before Pull: '{}'", # NEW
+    "workflow_handle_local_changes_before_pull": "  Handling Local Changes Before Pull: '{}'",
     "workflow_error_missing_repo_path": "Error for '{}': 'git_repo_path' is missing in config.json and not provided via --folder.",
     "workflow_task_aborted_missing_info": "Task '{}' aborted due to missing essential information.",
     "workflow_repo_not_found_init_attempt": "Git repository not found at '{}'. Attempting to initialize...",
@@ -103,15 +103,15 @@ MESSAGES = {
     "git_branch_op_completed": "Branch operation for '{}' completed.",
     "git_executing_generate_message_command": "Executing command to generate commit message: '{}'",
     "git_generate_message_command_failed": "Failed to generate commit message from command. Using default message.",
-    "git_local_changes_detected_pull_blocked": "Local uncommitted changes detected. Git pull is blocked.", # NEW
-    "git_auto_stashing_changes": "Automatically stashing local changes...", # NEW
-    "git_stash_successful": "Local changes stashed successfully.", # NEW
-    "git_stash_failed": "Failed to stash local changes.", # NEW
-    "git_stash_pop_applying": "Applying stashed changes...", # NEW
-    "git_stash_pop_successful": "Stashed changes applied successfully.", # NEW
-    "git_stash_pop_failed_conflict": "Failed to pop stashed changes due to conflicts. Please resolve manually.", # NEW
-    "git_stash_pop_no_stash": "No stash entries found to pop.", # NEW
-    "git_skipping_stash_no_changes": "No uncommitted changes detected. Skipping stash.", # NEW
+    "git_local_changes_detected_pull_blocked": "Local uncommitted changes detected. Git pull is blocked.",
+    "git_auto_stashing_changes": "Automatically stashing local changes...",
+    "git_stash_successful": "Local changes stashed successfully.",
+    "git_stash_failed": "Failed to stash local changes.",
+    "git_stash_pop_applying": "Applying stashed changes...",
+    "git_stash_pop_successful": "Stashed changes applied successfully.",
+    "git_stash_pop_failed_conflict": "Failed to pop stashed changes due to conflicts. Please resolve manually.",
+    "git_stash_pop_no_stash": "No stash entries found to pop.",
+    "git_skipping_stash_no_changes": "No uncommitted changes detected. Skipping stash.",
 
 
     # Command Logic Messages
@@ -153,6 +153,7 @@ MESSAGES = {
     "cli_example_edit_config": "  Edit an existing config file:",
     "cli_example_list_tasks": "  List all configured tasks:",
     "cli_fix_json_help": "Add missing default keys to all existing JSON configuration files.",
+    "cli_update_help": "Update the Git Automation application itself by pulling from its repository.", # NEW
     "cli_error_edit_no_args": "Error: No task identifier or --json path provided for editing.",
     "cli_edit_usage_hint": "Usage: python main.py my_task --edit OR python main.py --json /path/to/my_config.json --edit",
     "cli_error_config_file_not_found": "Error: Configuration file '{}' not found.",
@@ -195,4 +196,10 @@ MESSAGES = {
     "config_fixed_skipped_malformed": "  Skipping '{}': Malformed JSON.",
     "config_fixed_error": "  Error fixing '{}': {}",
     "config_finished_fixing_jsons": "Finished fixing JSON config files.",
+    # App Update Messages
+    "app_update_start": "Starting application update. Pulling from '{}'...", # NEW
+    "app_update_success": "Application updated successfully!", # NEW
+    "app_update_no_changes": "Application is already up to date. No changes pulled.", # NEW
+    "app_update_failed": "Application update failed: {}", # NEW
+    "app_update_no_git_repo": "Application directory '{}' is not a Git repository. Cannot update.", # NEW
 }
