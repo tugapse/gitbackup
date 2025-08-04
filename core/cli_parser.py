@@ -11,47 +11,41 @@ def parse_arguments():
         description=MESSAGES["cli_description"]
     )
 
-    # --- Mutually exclusive group for core actions: run task, create config, or list configs ---
+    # --- Mutually exclusive group for PRIMARY, STANDALONE actions ---
+    # Only one of these can be specified: run task (positional), create config, list, fix-json
     group = parser.add_mutually_exclusive_group()
 
     # Positional argument: can be a task name or a direct config file path (for running OR editing)
     group.add_argument(
         "task_identifier",
-        nargs='?', # Makes it optional, as --create, --json, or --list can be used instead
+        nargs='?', # Makes it optional, as --create, --json, --list, --fix-json can be used instead
         help=MESSAGES["cli_task_identifier_help"]
     )
     
-    # --create flag: for creating a new config file (exclusive with task_identifier)
+    # --create flag: for creating a new config file
     group.add_argument(
         "--create",
         metavar="TASK_NAME",
         help=MESSAGES["cli_create_help"]
     )
 
-    # --list flag (added to the mutually exclusive group)
+    # --list flag
     group.add_argument(
         "--list",
         action="store_true",
         help=MESSAGES["cli_list_help"]
     )
 
-    # --fix-json flag (added to the mutually exclusive group)
+    # --fix-json flag
     group.add_argument(
         "--fix-json",
         action="store_true",
         help=MESSAGES["cli_fix_json_help"]
     )
-
-    # --- NEW: --update flag (added to the mutually exclusive group) ---
-    group.add_argument(
-        "--update",
-        action="store_true",
-        help=MESSAGES["cli_update_help"]
-    )
-    # --- End new ---
+    # --- End mutually exclusive group ---
 
 
-    # --- General options (can be combined with task_identifier or --json, but not --create or --list directly) ---
+    # --- General options (can be combined with task_identifier or --json) ---
 
     # --json flag: explicitly load from a file path (highest precedence for task/edit)
     parser.add_argument(
@@ -60,12 +54,35 @@ def parse_arguments():
         help=MESSAGES["cli_json_help"]
     )
 
-    # --edit flag (moved out of the mutually exclusive group)
+    # --edit flag
     parser.add_argument(
         "--edit",
         action="store_true",
         help=MESSAGES["cli_edit_help"]
     )
+
+    # --update flag
+    parser.add_argument(
+        "--update",
+        action="store_true",
+        help=MESSAGES["cli_update_help"]
+    )
+
+    # --- NEW: --show-last-commits N (moved out of mutually exclusive group) ---
+    parser.add_argument(
+        "--show-last-commits",
+        type=int,
+        metavar="N",
+        help=MESSAGES["cli_show_last_commits_help"]
+    )
+
+    # --- NEW: --revert-commit COMMIT_HASH (moved out of mutually exclusive group) ---
+    parser.add_argument(
+        "--revert-commit",
+        metavar="COMMIT_HASH",
+        help=MESSAGES["cli_revert_commit_help"]
+    )
+    # --- End new ---
 
     # --config-dir: base directory for task name lookups
     default_config_dir = os.path.join(os.path.expanduser('~'), 'git_automation_configs')

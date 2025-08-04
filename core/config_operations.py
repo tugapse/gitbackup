@@ -125,3 +125,30 @@ def fix_config_files(config_dir):
                 log(MESSAGES["config_fixed_error"].format(filename, e), level='error')
     
     log(MESSAGES["config_finished_fixing_jsons"], level='step')
+
+
+def load_task_config(filepath):
+    """
+    Loads a JSON task configuration from the given filepath.
+    Handles file not found, JSON decode errors, and non-dict JSONs.
+    Exits the script on error.
+    """
+    if not os.path.exists(filepath):
+        log(MESSAGES["cli_error_config_file_not_found"].format(filepath), level='error')
+        sys.exit(1)
+    
+    try:
+        with open(filepath, 'r') as f:
+            task = json.load(f)
+    except json.JSONDecodeError as e:
+        log(MESSAGES["cli_error_invalid_json_format"].format(filepath, e), level='error')
+        sys.exit(1)
+    except Exception as e:
+        log(MESSAGES["cli_error_unexpected_reading_config"].format(filepath, e), level='error')
+        sys.exit(1)
+
+    if not isinstance(task, dict):
+        log(MESSAGES["cli_error_json_not_object"].format(filepath), level='error')
+        sys.exit(1)
+    
+    return task
