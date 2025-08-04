@@ -16,6 +16,7 @@ def _execute_git_command(command_parts, cwd, task_name, log_stdout_stderr=True):
     log(MESSAGES["git_executing_command"].format(cmd_str, cwd), level='debug', task_name=task_name)
 
     is_diff_command = command_parts[0] == 'diff'
+    is_revert_command = command_parts[0] == 'revert' # NEW: Identify revert commands
 
     try:
         result = subprocess.run(
@@ -36,10 +37,16 @@ def _execute_git_command(command_parts, cwd, task_name, log_stdout_stderr=True):
             log(MESSAGES["git_command_failed"].format(result.returncode), level='debug', task_name=task_name) # Log as debug for diff
             return result.stdout.strip(), True # Treat as success
         
-        # For all other commands, or if diff command had a fatal error (exit code > 1)
+        # NEW: Special handling for git revert: exit code 1 means conflicts (not a fatal error, but needs attention)
+        if is_revert_command and result.returncode == 1:
+            log(MESSAGES["git_command_failed"].format(result.returncode), level='warning', task_name=task_name)
+            # Signal conflict by returning false, and let calling function interpret
+            return result.stdout.strip() + "\n" + result.stderr.strip(), False 
+        
+        # For all other commands, or if diff/revert command had a fatal error (exit code > 1)
         if result.returncode != 0:
             log(MESSAGES["git_command_failed"].format(result.returncode), level='error', task_name=task_name)
-            return result.stdout.strip(), False # Indicate failure
+            return result.stdout.strip() + "\n" + result.stderr.strip(), False # Indicate failure (concat stdout/stderr for error message)
         
         return result.stdout.strip(), True # Success (exit code 0)
 
@@ -283,3 +290,70 @@ def push_updates(repo_path, branch, origin="origin", task_name=""):
         return False
     log(MESSAGES["git_push_successful"], level='success', task_name=task_name)
     return True
+
+
+def get_last_commits(repo_path, num_commits=5, task_name=""):
+    """
+    Retrieves and displays the last N commits from the specified repository.
+    Returns True on success, False on error.
+    """
+    log(MESSAGES["git_showing_last_commits"].format(num_commits, repo_path), level='step', task_name=task_name)
+    
+    # Check if it's a Git repository
+    if not os.path.isdir(os.path.join(repo_path, '.git')):
+        log(MESSAGES["workflow_error_repo_not_valid"].format(task_name, repo_path), level='error')
+        return False
+
+    # git log --pretty=format:"%h - %an, %ar : %s" -n N
+    # %h: commit hash (abbreviated)
+    # %an: author name
+    # %ar: author date, relative
+    # %s: subject (commit message title)
+    cmd_parts = ['log', f'--pretty=format:%h - %an, %ar : %s', f'-n{num_commits}']
+    stdout, success = _execute_git_command(cmd_parts, cwd=repo_path, task_name=task_name)
+
+    if not success:
+        log(MESSAGES["git_no_commits_found"].format(repo_path), level='error', task_name=task_name)
+        return False
+    
+    if not stdout.strip():
+        log(MESSAGES["git_no_commits_found"].format(repo_path), level='normal', task_name=task_name)
+        return True # No commits, but command succeeded
+        
+    print("\n" + stdout + "\n") # Print raw git log output for readability
+    return True
+
+def revert_commit(repo_path, commit_hash, task_name=""):
+    """
+    Reverts a specific commit in the given repository.
+    Returns True on success, False on error (including conflicts).
+    """
+    log(MESSAGES["git_revert_start"].format(commit_hash, repo_path), level='step', task_name=task_name)
+
+    # Check if it's a Git repository
+    if not os.path.isdir(os.path.join(repo_path, '.git')):
+        log(MESSAGES["workflow_error_repo_not_valid"].format(task_name, repo_path), level='error')
+        return False
+
+    # Check if the commit hash exists (optional but good for user feedback)
+    stdout_check, success_check = _execute_git_command(['rev-parse', '--verify', commit_hash + '^{commit}'], cwd=repo_path, task_name=task_name, log_stdout_stderr=False)
+    if not success_check:
+        log(MESSAGES["git_revert_no_commit_found"].format(commit_hash, repo_path), level='error', task_name=task_name)
+        return False
+
+    # Execute git revert --no-edit (to prevent opening an editor)
+    # The user has already confirmed, so we assume they want the default revert message.
+    # We might want to make this configurable later.
+    stdout_revert, success_revert = _execute_git_command(['revert', '--no-edit', commit_hash], cwd=repo_path, task_name=task_name)
+
+    if success_revert:
+        log(MESSAGES["git_revert_success"].format(commit_hash), level='success', task_name=task_name)
+        return True
+    else:
+        # Check for merge conflict indicators in the stderr/stdout from _execute_git_command
+        # _execute_git_command already concatenates stdout/stderr on failure
+        if "conflict" in stdout_revert.lower() or "merge" in stdout_revert.lower():
+            log(MESSAGES["git_revert_conflict"].format(commit_hash), level='error', task_name=task_name)
+        else:
+            log(MESSAGES["git_revert_failed"].format(commit_hash, "See logs above for details."), level='error', task_name=task_name)
+        return False

@@ -20,6 +20,7 @@ MESSAGES = {
     "workflow_generate_commit_message_command": "  Generate Commit Message Command: '{}'",
     "workflow_no_generate_commit_message_command": "  No command to generate commit message specified.",
     "workflow_handle_local_changes_before_pull": "  Handling Local Changes Before Pull: '{}'",
+    "workflow_task_update_mode_active": "  Running in Update Mode: Will sync repo and commit changes.",
     "workflow_error_missing_repo_path": "Error for '{}': 'git_repo_path' is missing in config.json and not provided via --folder.",
     "workflow_task_aborted_missing_info": "Task '{}' aborted due to missing essential information.",
     "workflow_repo_not_found_init_attempt": "Git repository not found at '{}'. Attempting to initialize...",
@@ -84,7 +85,7 @@ MESSAGES = {
     "git_adding_remote_origin": "Adding remote origin '{}'...",
     "git_add_remote_failed": "Failed to add remote origin '{}'.",
     "git_add_remote_successful": "Remote origin '{}' added successfully.",
-    "git_checkout_or_create_branch_step": "Checking out or creating branch '{}'...",
+    "git_checkout_or_create_branch_step": "Checking out or creating branch '{}'",
     "git_fetching_remote": "Fetching from remote '{}' to update branch list...",
     "git_fetch_failed_warning": "Failed to fetch from remote '{}'. This might affect branch detection.",
     "git_branch_found_remote": "Branch '{}' found on remote '{}'.",
@@ -112,7 +113,13 @@ MESSAGES = {
     "git_stash_pop_failed_conflict": "Failed to pop stashed changes due to conflicts. Please resolve manually.",
     "git_stash_pop_no_stash": "No stash entries found to pop.",
     "git_skipping_stash_no_changes": "No uncommitted changes detected. Skipping stash.",
-
+    "git_showing_last_commits": "Showing last {} commits for repository '{}':",
+    "git_no_commits_found": "No commits found in repository '{}'.",
+    "git_revert_start": "Attempting to revert commit '{}' in repository '{}'.",
+    "git_revert_success": "Commit '{}' reverted successfully.",
+    "git_revert_failed": "Failed to revert commit '{}': {}",
+    "git_revert_conflict": "Revert of commit '{}' resulted in conflicts. Please resolve conflicts manually and then commit.",
+    "git_revert_no_commit_found": "No commit found with hash '{}' in repository '{}'.",
 
     # Command Logic Messages
     "command_executing": "Executing command: {}",
@@ -133,6 +140,7 @@ MESSAGES = {
     "cli_edit_help": "Open the identified JSON configuration file in the default text editor. Requires a 'task_identifier' or '--json' path.",
     "cli_list_help": "List all configured tasks found in the config directory, showing their name, branch, and local repository location.",
     "cli_json_help": "Explicitly specify the full path to the JSON configuration file to load/edit. This overrides the positional 'task_identifier' if it was a task name.",
+    "cli_fix_json_help": "Add missing default keys to all existing JSON configuration files.",
     "cli_config_dir_help": "Base directory for looking up config files when only a task name is provided (e.g., 'my_task' resolves to 'PATH/my_task.json'). Defaults to '{}'.",
     "cli_output_help": "Specify the output filepath for the new configuration file (used with --create). Defaults to TASK_NAME.json in the default config directory.",
     "cli_branch_override_help": "Overrides the 'branch' specified in the config file for this run or pre-fills it during creation.",
@@ -141,19 +149,9 @@ MESSAGES = {
     "cli_verbose_help": "Enable verbose output for detailed logging of operations.",
     "cli_overwrite_help": "When creating a configuration file, overwrite it if it already exists.",
     "cli_initialize_help": "Initialize the Git repository if it does not exist at the specified 'git_repo_path'.",
-    "cli_error_no_task_or_json": "No task identifier or --json path provided to run a task.",
-    "cli_usage_examples": "Usage Examples:",
-    "cli_example_run_by_name": "  Run by task name (e.g., 'my_daily_backup' in default config dir):",
-    "cli_example_run_by_name_config_dir": "  Run by task name in a specific config directory:",
-    "cli_example_run_by_json_path": "  Run by explicit JSON file path:",
-    "cli_example_run_by_json_path_positional": "  Run by explicit JSON file path (positional):",
-    "cli_example_create_new_config": "  Create a new config (defaults to user home config dir):",
-    "cli_example_create_overwrite": "  Create a new config and overwrite if exists:",
-    "cli_example_initialize_run": "  Initialize a new Git repo and run a task:",
-    "cli_example_edit_config": "  Edit an existing config file:",
-    "cli_example_list_tasks": "  List all configured tasks:",
-    "cli_fix_json_help": "Add missing default keys to all existing JSON configuration files.",
-    "cli_update_help": "Update the Git Automation application itself by pulling from its repository.", # NEW
+    "cli_update_help": "Run the task in 'update mode': sync repo, commit changes, skip command_line.",
+    "cli_show_last_commits_help": "Show the last N commits for the repository defined in the task. Requires a task identifier.",
+    "cli_revert_commit_help": "Revert a specific commit in the repository defined in the task. Requires a task identifier and commit hash.",
     "cli_error_edit_no_args": "Error: No task identifier or --json path provided for editing.",
     "cli_edit_usage_hint": "Usage: python main.py my_task --edit OR python main.py --json /path/to/my_config.json --edit",
     "cli_error_config_file_not_found": "Error: Configuration file '{}' not found.",
@@ -171,6 +169,9 @@ MESSAGES = {
     "cli_error_editor_not_found": "Error: Default editor command not found. Ensure '{}' is in your PATH.",
     "cli_error_opening_file_editor": "Error opening file with default editor: {}",
     "cli_error_unexpected_opening_file": "An unexpected error occurred while trying to open the file: {}",
+    "cli_revert_confirmation": "WARNING: This will create a new commit that undoes the changes of commit '{}'. This action cannot be easily undone. Do you wish to proceed? (yes/no): ",
+    "cli_revert_aborted": "Revert aborted by user.",
+    "cli_error_no_task_for_git_action": "Error: No task identifier or --json path provided. Git actions like '--show-last-commits' or '--revert-commit' require a target repository from a task configuration.",
 
     # Config Operations Messages
     "config_start_creation": "Starting configuration file creation for task: '{}'",
@@ -196,10 +197,4 @@ MESSAGES = {
     "config_fixed_skipped_malformed": "  Skipping '{}': Malformed JSON.",
     "config_fixed_error": "  Error fixing '{}': {}",
     "config_finished_fixing_jsons": "Finished fixing JSON config files.",
-    # App Update Messages
-    "app_update_start": "Starting application update. Pulling from '{}'...", # NEW
-    "app_update_success": "Application updated successfully!", # NEW
-    "app_update_no_changes": "Application is already up to date. No changes pulled.", # NEW
-    "app_update_failed": "Application update failed: {}", # NEW
-    "app_update_no_git_repo": "Application directory '{}' is not a Git repository. Cannot update.", # NEW
 }

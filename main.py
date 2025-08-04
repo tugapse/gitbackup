@@ -10,8 +10,38 @@ from core.cli_parser import parse_arguments
 from core.logger import set_verbose, log
 from core.messages import MESSAGES
 from core.workflow_logic import run_task_workflow
-from core.config_operations import create_config_file, fix_config_files
-from core.git_logic import pull_updates # Import pull_updates for application self-update
+from core.config_operations import create_config_file, fix_config_files, load_task_config # NEW: Import load_task_config
+from core.git_logic import get_last_commits, revert_commit # NEW: Import git logic functions
+
+
+# Helper function to get task config and repo path for git actions
+def _get_repo_path_from_task(args, effective_config_base_dir):
+    config_file_path = None
+    if args.json:
+        config_file_path = args.json
+    elif args.task_identifier:
+        if args.task_identifier.lower().endswith(".json"):
+            config_file_path = args.task_identifier
+        else:
+            config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
+
+    if not config_file_path:
+        log(MESSAGES["cli_error_no_task_for_git_action"], level='error')
+        sys.exit(1)
+
+    if not os.path.exists(config_file_path):
+        log(MESSAGES["cli_error_config_file_not_found"].format(config_file_path), level='error')
+        sys.exit(1)
+    
+    # Load the task config to get the git_repo_path
+    task = load_task_config(config_file_path) # Assumes load_task_config handles errors/exits
+    git_repo_path = args.folder if args.folder is not None else task.get("git_repo_path")
+
+    if not git_repo_path:
+        log(MESSAGES["workflow_error_missing_repo_path"].format(task.get('name', 'selected task')), level='error')
+        sys.exit(1)
+    
+    return git_repo_path, task.get('name', os.path.basename(config_file_path))
 
 
 if __name__ == "__main__":
@@ -31,17 +61,6 @@ if __name__ == "__main__":
             log(MESSAGES["config_error_creating_default_config_path"].format(effective_config_base_dir, e), level='error')
             sys.exit(1)
 
-    # --- Determine the configuration file path for running/editing a task ---
-    config_file_path = None
-
-    if args.json:
-        config_file_path = args.json
-    elif args.task_identifier:
-        if args.task_identifier.lower().endswith(".json"):
-            config_file_path = args.task_identifier
-        else:
-            config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
-    
     # --- Handle --create command ---
     if args.create:
         task_name_for_creation = args.create
@@ -63,6 +82,15 @@ if __name__ == "__main__":
     
     # --- Handle --edit command ---
     if args.edit:
+        config_file_path = None # Reset for specific handling
+        if args.json:
+            config_file_path = args.json
+        elif args.task_identifier:
+            if args.task_identifier.lower().endswith(".json"):
+                config_file_path = args.task_identifier
+            else:
+                config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
+
         if not config_file_path:
             log(MESSAGES["cli_error_edit_no_args"], level='error')
             log(MESSAGES["cli_edit_usage_hint"], level='normal')
@@ -104,8 +132,7 @@ if __name__ == "__main__":
                 if filename.endswith(".json"):
                     filepath = os.path.join(effective_config_base_dir, filename)
                     try:
-                        with open(filepath, 'r') as f:
-                            task = json.load(f)
+                        task = load_task_config(filepath) # Use the new load_task_config
                             
                         task_name = task.get("name", os.path.splitext(filename)[0])
                         branch = task.get("branch", "N/A")
@@ -115,7 +142,7 @@ if __name__ == "__main__":
                         log(f"  {repo_path}", level='info')
                         tasks_found = True
 
-                    except json.JSONDecodeError:
+                    except json.JSONDecodeError: # load_task_config will already handle this, but keep for robustness if we change
                         log(MESSAGES["cli_warning_malformed_json"].format(filename), level='warning')
                     except KeyError as e:
                         log(MESSAGES["cli_warning_missing_key"].format(filename, e), level='warning')
@@ -131,35 +158,45 @@ if __name__ == "__main__":
     if args.fix_json:
         fix_config_files(effective_config_base_dir)
         sys.exit(0)
-
-    # --- NEW: Handle --update command ---
-    if args.update:
-        app_repo_path = os.path.dirname(os.path.abspath(__file__)) # Get current script's directory
-        
-        # Check if the current directory is a Git repository
-        if not os.path.isdir(os.path.join(app_repo_path, '.git')):
-            log(MESSAGES["app_update_no_git_repo"].format(app_repo_path), level='error')
+    
+    # --- NEW: Handle --show-last-commits command ---
+    if args.show_last_commits is not None:
+        if not args.task_identifier and not args.json:
+            log(MESSAGES["cli_error_no_task_for_git_action"], level='error')
             sys.exit(1)
-
-        log(MESSAGES["app_update_start"].format(app_repo_path), level='step')
         
-        # Use pull_updates from core.git_logic. We assume the application's
-        # main branch is 'main' and origin is 'origin'.
-        # We pass a placeholder 'task_name' as pull_updates expects it.
-        pull_success = pull_updates(app_repo_path, "main", task_name="App Update")
-        
-        if pull_success:
-            # Check if there were actual changes pulled (stdout from pull_updates will contain "Already up to date." or "Updating...")
-            # For simplicity, we'll assume pull_updates logs enough and its success implies updates or already up-to-date.
-            log(MESSAGES["app_update_success"], level='success')
-        else:
-            log(MESSAGES["app_update_failed"].format("Git pull failed"), level='error')
-        
+        repo_path, task_name_for_log = _get_repo_path_from_task(args, effective_config_base_dir)
+        get_last_commits(repo_path, args.show_last_commits, task_name=task_name_for_log)
         sys.exit(0)
-    # --- End NEW ---
+
+    # --- NEW: Handle --revert-commit command ---
+    if args.revert_commit:
+        if not args.task_identifier and not args.json:
+            log(MESSAGES["cli_error_no_task_for_git_action"], level='error')
+            sys.exit(1)
+        
+        repo_path, task_name_for_log = _get_repo_path_from_task(args, effective_config_base_dir)
+        
+        # Confirmation for revert
+        confirmation = input(MESSAGES["cli_revert_confirmation"].format(args.revert_commit)).strip().lower()
+        if confirmation != 'yes':
+            log(MESSAGES["cli_revert_aborted"], level='normal')
+            sys.exit(0)
+
+        revert_commit(repo_path, args.revert_commit, task_name=task_name_for_log)
+        sys.exit(0)
 
 
-    # --- If none of the above specific actions (create, edit, list, fix-json, update) were requested, then proceed to run a task ---
+    # --- If none of the above specific actions (create, edit, list, fix-json, show-commits, revert-commit) were requested, then proceed to run a task ---
+    config_file_path = None # Re-determine config_file_path as it might have been used/set by git actions helper
+    if args.json:
+        config_file_path = args.json
+    elif args.task_identifier:
+        if args.task_identifier.lower().endswith(".json"):
+            config_file_path = args.task_identifier
+        else:
+            config_file_path = os.path.join(effective_config_base_dir, f"{args.task_identifier}.json")
+
     if not config_file_path:
         log(MESSAGES["cli_error_no_task_or_json"], level='error')
         log(MESSAGES["cli_usage_examples"], level='normal')
@@ -172,27 +209,13 @@ if __name__ == "__main__":
         log(f"  {MESSAGES['cli_example_initialize_run']}\n    python main.py my_new_repo_task --folder /tmp/my_new_repo --initialize --branch dev --origin https://github.com/user/new-repo.git", level='normal')
         log(f"  {MESSAGES['cli_example_edit_config']}\n    python main.py my_daily_backup --edit", level='normal')
         log(f"  {MESSAGES['cli_example_list_tasks']}\n    python main.py --list", level='normal')
+        log(f"  {MESSAGES['cli_show_last_commits_help']}\n    python main.py my_task --show-last-commits 5", level='normal') # New example
+        log(f"  {MESSAGES['cli_revert_commit_help']}\n    python main.py my_task --revert-commit <hash>", level='normal') # New example
+
         sys.exit(1)
 
-    # If we reach here, it means a task needs to be run.
-    # Load the task configuration and run the workflow.
-    if not os.path.exists(config_file_path):
-        log(MESSAGES["cli_error_config_file_not_found"].format(config_file_path), level='error')
-        sys.exit(1)
+    # Load the task configuration for running the workflow
+    task = load_task_config(config_file_path) # Using the new helper
 
-    try:
-        with open(config_file_path, 'r') as f:
-            task = json.load(f)
-    except json.JSONDecodeError as e:
-        log(MESSAGES["cli_error_invalid_json_format"].format(config_file_path, e), level='error')
-        sys.exit(1)
-    except Exception as e:
-        log(MESSAGES["cli_error_unexpected_reading_config"].format(config_file_path, e), level='error')
-        sys.exit(1)
-
-    if not isinstance(task, dict):
-        log(MESSAGES["cli_error_json_not_object"].format(config_file_path), level='error')
-        sys.exit(1)
-
-    # Call the extracted workflow function
-    run_task_workflow(args, task, config_file_path)
+    # Call the extracted workflow function, passing the update flag
+    run_task_workflow(args, task, config_file_path, update_mode=args.update)
