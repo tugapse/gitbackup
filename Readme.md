@@ -167,7 +167,8 @@ Each file is named `<task_identifier>.json`.
 
 All CLI operations are logged to a file for review and debugging:
 
-* **Log File Location:** `~/.config/git_automation_configs/git_automation.log`
+* **Default Log File:** `logs/git_automation.log` beside the script (or executable when packaged), independent of the current working directory.
+* **Custom Log File:** Set `GIT_AUTOMATION_LOG_FILE` to the desired log file path to override the default.
 
 **Contributing**
 ----------------

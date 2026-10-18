@@ -172,6 +172,17 @@ MESSAGES = {
     "cli_revert_confirmation": "WARNING: This will create a new commit that undoes the changes of commit '{}'. This action cannot be easily undone. Do you wish to proceed? (yes/no): ",
     "cli_revert_aborted": "Revert aborted by user.",
     "cli_error_no_task_for_git_action": "Error: No task identifier or --json path provided. Git actions like '--show-last-commits' or '--revert-commit' require a target repository from a task configuration.",
+    "cli_error_no_task_or_json": "Error: No task identifier or --json path provided.",
+    "cli_usage_examples": "Usage examples:",
+    "cli_example_run_by_name": "Run a task by name:",
+    "cli_example_run_by_name_config_dir": "Run a task by name with a custom config directory:",
+    "cli_example_run_by_json_path": "Run a task using --json with a config path:",
+    "cli_example_run_by_json_path_positional": "Run a task using a positional config path:",
+    "cli_example_create_new_config": "Create a new configuration:",
+    "cli_example_create_overwrite": "Create and overwrite an existing configuration:",
+    "cli_example_initialize_run": "Initialize a repository and run a task:",
+    "cli_example_edit_config": "Edit a task configuration:",
+    "cli_example_list_tasks": "List configured tasks:",
 
     # Config Operations Messages
     "config_start_creation": "Starting configuration file creation for task: '{}'",
