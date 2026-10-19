@@ -28,21 +28,16 @@ def set_verbose(enabled: bool):
     _verbose_enabled = enabled
 
 def get_log_file_path():
-    """Determines the log file path based on XDG Base Directory Specification."""
-    xdg_config_home = os.environ.get('XDG_CONFIG_HOME')
-    if xdg_config_home:
-        return os.path.join(xdg_config_home, 'git_automation', 'git_automation.log')
+    """Return the configured log path or logs/git_automation.log beside the app."""
+    configured_path = os.environ.get('GIT_AUTOMATION_LOG_FILE')
+    if configured_path:
+        return os.path.abspath(os.path.expanduser(configured_path))
+
+    if getattr(sys, 'frozen', False):
+        app_dir = os.path.dirname(os.path.abspath(sys.executable))
     else:
-        # Fallback for systems not using XDG_CONFIG_HOME or for Windows
-        if os.name == 'posix': # Linux, macOS, etc.
-            home_dir = os.path.expanduser("~")
-            return os.path.join(home_dir, '.config', 'git_automation', 'git_automation.log')
-        elif os.name == 'nt': # Windows
-            appdata = os.environ.get('APPDATA')
-            return os.path.join(appdata, 'git_automation', 'git_automation.log')
-        else:
-            # Generic fallback if OS not recognized
-            return os.path.join(os.getcwd(), 'git_automation.log')
+        app_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(app_dir, 'logs', 'git_automation.log')
 
 def clear_log_file():
     """Clears the content of the log file."""
@@ -107,6 +102,7 @@ def log(message, level='info', task_name=""):
     # Always write to log file, regardless of console display settings
     log_file_path = get_log_file_path()
     try:
+        os.makedirs(os.path.dirname(log_file_path), exist_ok=True)
         with open(log_file_path, 'a') as f:
             f.write(log_line_to_file + '\n')
     except IOError as e:
