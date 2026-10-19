@@ -1,5 +1,4 @@
 import os
-import json
 import sys
 import subprocess
 
@@ -241,8 +240,5 @@ def main():
     run_task_workflow(args, task, config_file_path, update_mode=args.update)
 
 
-    # Load the task configuration for running the workflow
-    task = load_task_config(config_file_path) # Using the new helper
-
-    # Call the extracted workflow function, passing the update flag
-    run_task_workflow(args, task, config_file_path, update_mode=args.update)
+if __name__ == "__main__":
+    main()
