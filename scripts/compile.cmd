@@ -5,13 +5,13 @@ echo --- Starting PyInstaller Build (Windows) ---
 
 REM 1. Activate the virtual environment
 echo Activating virtual environment...
-@REM if exist ".env\Scripts\activate.bat" (
-@REM     call .env\Scripts\activate.bat
-@REM     echo Virtual environment activated.
-@REM ) else (
-@REM     echo Error: Virtual environment 'venv' not found. Please create it (python -m venv venv) and install dependencies (pip install -r requirements.txt) first.
-@REM     exit /b 1
-@REM )
+if exist ".venv\Scripts\activate.bat" (
+   call .venv\Scripts\activate.bat
+   echo Virtual environment activated.
+) else (
+   echo Error: Virtual environment '.venv' not found. Please create it (python -m venv .venv) and install dependencies (pip install -r requirements.txt) first.
+   exit /b 1
+)
 
 REM 2. Clean previous build artifacts
 echo Cleaning previous build artifacts...

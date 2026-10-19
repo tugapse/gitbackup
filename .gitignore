@@ -3,7 +3,7 @@
 .env
 dist/*
 build/*
-GitAutomator.spec
+GitB.spec
 *.code-workspace
 */__pycache__/
 */__pycache__/*
